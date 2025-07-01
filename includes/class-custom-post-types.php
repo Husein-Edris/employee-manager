@@ -13,10 +13,16 @@ class RT_Employee_Manager_Custom_Post_Types {
         add_action('pre_get_posts', array($this, 'filter_employee_posts_for_kunden'));
         add_filter('map_meta_cap', array($this, 'map_employee_meta_caps'), 10, 4);
         
-        // Add custom columns and row actions
+        // Add custom columns and row actions for employees
         add_filter('manage_angestellte_posts_columns', array($this, 'add_employee_columns'));
         add_action('manage_angestellte_posts_custom_column', array($this, 'populate_employee_columns'), 10, 2);
-        add_filter('post_row_actions', array($this, 'add_employee_row_actions'), 10, 2);
+        
+        // Add custom columns and row actions for customers
+        add_filter('manage_kunde_posts_columns', array($this, 'add_kunde_columns'));
+        add_action('manage_kunde_posts_custom_column', array($this, 'populate_kunde_columns'), 10, 2);
+        
+        // Add row actions for both post types
+        add_filter('post_row_actions', array($this, 'add_custom_row_actions'), 10, 2);
     }
     
     public static function register_post_types() {
@@ -178,11 +184,16 @@ class RT_Employee_Manager_Custom_Post_Types {
                 'edit_private_employees' => false,
                 'edit_published_employees' => true,
                 'upload_files' => true,
+                // Client capabilities for editing their own kunde post
+                'edit_clients' => true,
+                'read_client' => true,
+                'delete_clients' => true,
             ));
         } else {
             // Update existing kunden role with new capabilities
             $kunden_role = get_role('kunden');
             if ($kunden_role) {
+                // Employee capabilities
                 $kunden_role->add_cap('create_employees');
                 $kunden_role->add_cap('edit_employees');
                 $kunden_role->add_cap('publish_employees');
@@ -190,6 +201,10 @@ class RT_Employee_Manager_Custom_Post_Types {
                 $kunden_role->add_cap('delete_employees');
                 $kunden_role->add_cap('delete_published_employees');
                 $kunden_role->add_cap('edit_published_employees');
+                // Client capabilities
+                $kunden_role->add_cap('edit_clients');
+                $kunden_role->add_cap('read_client');
+                $kunden_role->add_cap('delete_clients');
             }
         }
     }
@@ -227,16 +242,16 @@ class RT_Employee_Manager_Custom_Post_Types {
     }
     
     /**
-     * Map meta capabilities for employee posts
+     * Map meta capabilities for employee and kunde posts
      */
     public function map_employee_meta_caps($caps, $cap, $user_id, $args) {
-        // Handle employee post capabilities - including standard WordPress caps
-        if (in_array($cap, array('edit_employee', 'delete_employee', 'read_employee', 'edit_post', 'delete_post', 'read_post'))) {
+        // Handle employee and kunde post capabilities - including standard WordPress caps
+        if (in_array($cap, array('edit_employee', 'delete_employee', 'read_employee', 'edit_client', 'delete_client', 'read_client', 'edit_post', 'delete_post', 'read_post'))) {
             $post_id = isset($args[0]) ? $args[0] : 0;
             $post = get_post($post_id);
             
-            // Only handle angestellte post type
-            if (!$post || $post->post_type !== 'angestellte') {
+            // Only handle angestellte and kunde post types
+            if (!$post || !in_array($post->post_type, array('angestellte', 'kunde'))) {
                 return $caps;
             }
             
@@ -247,32 +262,57 @@ class RT_Employee_Manager_Custom_Post_Types {
                 return array('manage_options');
             }
             
-            // Kunden users can only edit their own employees
-            if ($user && in_array('kunden', $user->roles)) {
-                $employer_id = get_post_meta($post_id, 'employer_id', true);
+            // Handle kunde posts
+            if ($post->post_type === 'kunde') {
+                $post_user_id = get_post_meta($post_id, 'user_id', true) ?: $post->post_author;
                 
-                // Debug: Force metadata fix if missing
-                if (empty($employer_id)) {
-                    $this->force_fix_employee_metadata($post_id, $user_id);
-                    $employer_id = get_post_meta($post_id, 'employer_id', true);
-                }
-                
-                if ($employer_id == $user_id) {
-                    // User owns this employee - allow the action
+                // Kunden users can only edit their own kunde post
+                if ($user && in_array('kunden', $user->roles) && $post_user_id == $user_id) {
                     switch ($cap) {
-                        case 'edit_employee':
+                        case 'edit_client':
                         case 'edit_post':
-                            return array('edit_employees');
-                        case 'delete_employee':
+                            return array('edit_clients');
+                        case 'delete_client':
                         case 'delete_post':
-                            return array('delete_employees');
-                        case 'read_employee':
+                            return array('delete_clients');
+                        case 'read_client':
                         case 'read_post':
-                            return array('read_employee');
+                            return array('read_client');
                     }
                 } else {
-                    // User doesn't own this employee - deny
                     return array('do_not_allow');
+                }
+            }
+            
+            // Handle angestellte posts
+            if ($post->post_type === 'angestellte') {
+                // Kunden users can only edit their own employees
+                if ($user && in_array('kunden', $user->roles)) {
+                    $employer_id = get_post_meta($post_id, 'employer_id', true);
+                    
+                    // Debug: Force metadata fix if missing
+                    if (empty($employer_id)) {
+                        $this->force_fix_employee_metadata($post_id, $user_id);
+                        $employer_id = get_post_meta($post_id, 'employer_id', true);
+                    }
+                    
+                    if ($employer_id == $user_id) {
+                        // User owns this employee - allow the action
+                        switch ($cap) {
+                            case 'edit_employee':
+                            case 'edit_post':
+                                return array('edit_employees');
+                            case 'delete_employee':
+                            case 'delete_post':
+                                return array('delete_employees');
+                            case 'read_employee':
+                            case 'read_post':
+                                return array('read_employee');
+                        }
+                    } else {
+                        // User doesn't own this employee - deny
+                        return array('do_not_allow');
+                    }
                 }
             }
         }
@@ -399,21 +439,75 @@ class RT_Employee_Manager_Custom_Post_Types {
     }
     
     /**
-     * Add custom row actions
+     * Add custom columns to kunde list
      */
-    public function add_employee_row_actions($actions, $post) {
+    public function add_kunde_columns($columns) {
+        $new_columns = array();
+        $new_columns['cb'] = $columns['cb'];
+        $new_columns['title'] = $columns['title'];
+        $new_columns['kunde_uid'] = __('UID-Nummer', 'rt-employee-manager');
+        $new_columns['kunde_phone'] = __('Telefon', 'rt-employee-manager');
+        $new_columns['kunde_email'] = __('E-Mail', 'rt-employee-manager');
+        $new_columns['date'] = $columns['date'];
+        
+        return $new_columns;
+    }
+    
+    /**
+     * Populate kunde columns
+     */
+    public function populate_kunde_columns($column, $post_id) {
+        switch ($column) {
+            case 'kunde_uid':
+                $uid = get_post_meta($post_id, 'uid_number', true);
+                echo esc_html($uid ?: '-');
+                break;
+                
+            case 'kunde_phone':
+                $phone = get_post_meta($post_id, 'phone', true);
+                echo esc_html($phone ?: '-');
+                break;
+                
+            case 'kunde_email':
+                $email = get_post_meta($post_id, 'email', true);
+                if ($email) {
+                    echo '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>';
+                } else {
+                    echo '-';
+                }
+                break;
+        }
+    }
+    
+    /**
+     * Add custom row actions for both post types
+     */
+    public function add_custom_row_actions($actions, $post) {
+        $current_user_id = get_current_user_id();
+        $current_user = wp_get_current_user();
+        
         if ($post->post_type === 'angestellte') {
-            $current_user_id = get_current_user_id();
             $employer_id = get_post_meta($post->ID, 'employer_id', true);
             
             // Fix missing metadata automatically
-            if (empty($employer_id) && in_array('kunden', wp_get_current_user()->roles)) {
+            if (empty($employer_id) && in_array('kunden', $current_user->roles)) {
                 $this->force_fix_employee_metadata($post->ID, $current_user_id);
                 $employer_id = get_post_meta($post->ID, 'employer_id', true);
             }
             
             // Only show edit/delete for owned employees or admins
             if (!current_user_can('manage_options') && $employer_id != $current_user_id) {
+                unset($actions['edit']);
+                unset($actions['inline hide-if-no-js']);
+                unset($actions['trash']);
+            }
+        }
+        
+        if ($post->post_type === 'kunde') {
+            $post_user_id = get_post_meta($post->ID, 'user_id', true) ?: $post->post_author;
+            
+            // Only show edit/delete for own kunde post or admins
+            if (!current_user_can('manage_options') && $post_user_id != $current_user_id) {
                 unset($actions['edit']);
                 unset($actions['inline hide-if-no-js']);
                 unset($actions['trash']);

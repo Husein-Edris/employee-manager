@@ -268,6 +268,9 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         // Save additional user meta from form
         if (!empty($entry)) {
             $this->save_user_meta_from_entry($user_id, $entry);
+            
+            // Create corresponding kunde CPT post
+            $this->create_kunde_post_from_registration($user_id, $entry);
         }
         
         $this->log_success('User registered successfully', array(
@@ -295,6 +298,74 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
                 update_user_meta($user_id, $meta_key, sanitize_text_field($value));
             }
         }
+    }
+    
+    /**
+     * Create kunde CPT post from user registration
+     */
+    private function create_kunde_post_from_registration($user_id, $entry) {
+        $company_name = rgar($entry, '23');
+        
+        if (empty($company_name)) {
+            $this->log_error('Cannot create kunde post - missing company name', array(
+                'user_id' => $user_id,
+                'entry_id' => $entry['id']
+            ));
+            return false;
+        }
+        
+        // Create the kunde post
+        $post_data = array(
+            'post_title' => sanitize_text_field($company_name),
+            'post_type' => 'kunde',
+            'post_status' => 'publish',
+            'post_author' => $user_id,
+            'meta_input' => array(
+                'company_name' => sanitize_text_field($company_name),
+                'uid_number' => sanitize_text_field(rgar($entry, '24')),
+                'phone' => sanitize_text_field(rgar($entry, '10')),
+                'email' => sanitize_email(rgar($entry, '11')), // assuming field 11 is email
+                'registration_date' => current_time('d.m.Y H:i'),
+                'form_entry_id' => $entry['id'],
+                'user_id' => $user_id, // Link back to the WordPress user
+            )
+        );
+        
+        // Add address data as a group
+        $address_data = array(
+            'street' => sanitize_text_field(rgar($entry, '21.1')),
+            'postcode' => sanitize_text_field(rgar($entry, '21.5')),
+            'city' => sanitize_text_field(rgar($entry, '21.3')),
+            'country' => sanitize_text_field(rgar($entry, '21.6')) ?: 'Austria'
+        );
+        
+        // Only add address if we have at least street or city
+        if (!empty($address_data['street']) || !empty($address_data['city'])) {
+            $post_data['meta_input']['address'] = $address_data;
+        }
+        
+        $post_id = wp_insert_post($post_data);
+        
+        if (is_wp_error($post_id)) {
+            $this->log_error('Failed to create kunde post', array(
+                'user_id' => $user_id,
+                'entry_id' => $entry['id'],
+                'error' => $post_id->get_error_message()
+            ));
+            return false;
+        }
+        
+        // Store the kunde post ID in user meta for easy reference
+        update_user_meta($user_id, 'kunde_post_id', $post_id);
+        
+        $this->log_success('Created kunde post successfully', array(
+            'user_id' => $user_id,
+            'post_id' => $post_id,
+            'entry_id' => $entry['id'],
+            'company_name' => $company_name
+        ));
+        
+        return $post_id;
     }
     
     /**

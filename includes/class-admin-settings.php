@@ -688,6 +688,9 @@ class RT_Employee_Manager_Admin_Settings {
      * Temporary function to fix test employee metadata
      */
     private function fix_test_employee_metadata() {
+        // Fix missing kunde posts first
+        $this->fix_missing_kunde_posts();
+        
         // Only run once - check if already fixed
         if (get_option('rt_test_employee_fixed')) {
             return;
@@ -730,5 +733,82 @@ class RT_Employee_Manager_Admin_Settings {
         
         // Mark as fixed
         update_option('rt_test_employee_fixed', true);
+    }
+    
+    /**
+     * Fix missing kunde CPT posts for existing users
+     */
+    private function fix_missing_kunde_posts() {
+        // Only run once - check if already fixed
+        if (get_option('rt_missing_kunde_posts_fixed')) {
+            return;
+        }
+        
+        // Get all kunden users
+        $kunden_users = get_users(array(
+            'role' => 'kunden',
+            'fields' => 'all'
+        ));
+        
+        $created_count = 0;
+        
+        foreach ($kunden_users as $user) {
+            // Check if user already has a kunde post
+            $existing_post_id = get_user_meta($user->ID, 'kunde_post_id', true);
+            
+            if (empty($existing_post_id) || !get_post($existing_post_id)) {
+                // Create kunde post for this user
+                $company_name = get_user_meta($user->ID, 'company_name', true);
+                
+                if (empty($company_name)) {
+                    $company_name = $user->display_name . ' Company'; // Fallback
+                }
+                
+                $post_data = array(
+                    'post_title' => sanitize_text_field($company_name),
+                    'post_type' => 'kunde',
+                    'post_status' => 'publish',
+                    'post_author' => $user->ID,
+                    'meta_input' => array(
+                        'company_name' => sanitize_text_field($company_name),
+                        'uid_number' => get_user_meta($user->ID, 'uid_number', true),
+                        'phone' => get_user_meta($user->ID, 'phone', true),
+                        'email' => $user->user_email,
+                        'registration_date' => get_date_from_gmt($user->user_registered, 'd.m.Y H:i'),
+                        'user_id' => $user->ID,
+                    )
+                );
+                
+                // Add address data if available
+                $address_data = array(
+                    'street' => get_user_meta($user->ID, 'address_street', true),
+                    'postcode' => get_user_meta($user->ID, 'address_postcode', true),
+                    'city' => get_user_meta($user->ID, 'address_city', true),
+                    'country' => get_user_meta($user->ID, 'address_country', true) ?: 'Austria'
+                );
+                
+                // Only add address if we have some data
+                if (!empty($address_data['street']) || !empty($address_data['city'])) {
+                    $post_data['meta_input']['address'] = $address_data;
+                }
+                
+                $post_id = wp_insert_post($post_data);
+                
+                if (!is_wp_error($post_id)) {
+                    // Store the kunde post ID in user meta
+                    update_user_meta($user->ID, 'kunde_post_id', $post_id);
+                    $created_count++;
+                    
+                    error_log('RT Employee Manager: Created kunde post #' . $post_id . ' for user #' . $user->ID);
+                }
+            }
+        }
+        
+        if ($created_count > 0) {
+            error_log('RT Employee Manager: Created ' . $created_count . ' missing kunde posts');
+        }
+        
+        // Mark as fixed
+        update_option('rt_missing_kunde_posts_fixed', true);
     }
 }
