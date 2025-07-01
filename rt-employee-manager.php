@@ -44,9 +44,17 @@ class RT_Employee_Manager {
         add_action('plugins_loaded', array($this, 'load_plugin'));
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
+        
+        // Add admin notice if plugin was recently deactivated
+        add_action('admin_notices', array($this, 'deactivation_notice'));
     }
     
     public function load_plugin() {
+        // Only load if plugin is actually active
+        if (!$this->is_plugin_really_active()) {
+            return;
+        }
+        
         // Check dependencies
         if (!$this->check_dependencies()) {
             add_action('admin_notices', array($this, 'dependency_notice'));
@@ -59,6 +67,18 @@ class RT_Employee_Manager {
         
         // Load text domain
         load_plugin_textdomain('rt-employee-manager', false, dirname(RT_EMPLOYEE_MANAGER_PLUGIN_BASENAME) . '/languages');
+    }
+    
+    /**
+     * Check if plugin is really active (not just file loaded)
+     */
+    private function is_plugin_really_active() {
+        // Check if we're in admin and the function exists
+        if (!function_exists('is_plugin_active')) {
+            include_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        return is_plugin_active(RT_EMPLOYEE_MANAGER_PLUGIN_BASENAME);
     }
     
     private function check_dependencies() {
@@ -148,8 +168,79 @@ class RT_Employee_Manager {
     }
     
     public function deactivate() {
-        // Flush rewrite rules
+        // Set a flag to indicate plugin was deactivated
+        update_option('rt_employee_manager_deactivated', time());
+        
+        // Unregister custom post types by flushing rewrite rules
         flush_rewrite_rules();
+        
+        // Clear any cached data
+        wp_cache_flush();
+        
+        // Clear custom post type queries from cache
+        wp_cache_delete('rt_employee_manager_post_types', 'options');
+        
+        // Remove custom capabilities from users (optional - keeps data intact)
+        $this->cleanup_capabilities_on_deactivation();
+        
+        // Clear any temporary options we set
+        delete_option('rt_test_employee_fixed');
+        delete_option('rt_missing_kunde_posts_fixed');
+        
+        // Force WordPress to rebuild the admin menu on next load
+        wp_cache_delete('admin_menu_', 'options');
+    }
+    
+    /**
+     * Clean up capabilities when deactivating (optional)
+     */
+    private function cleanup_capabilities_on_deactivation() {
+        // Note: We keep user roles and data intact, just remove our custom capabilities
+        // This is optional and can be commented out if you want to keep capabilities
+        
+        $capabilities_to_remove = array(
+            'create_employees', 'edit_employees', 'edit_others_employees', 'publish_employees',
+            'read_employee', 'read_private_employees', 'delete_employees', 'delete_others_employees',
+            'delete_private_employees', 'delete_published_employees', 'edit_private_employees',
+            'edit_published_employees', 'create_clients', 'edit_clients', 'edit_others_clients',
+            'publish_clients', 'read_client', 'read_private_clients', 'delete_clients',
+            'delete_others_clients', 'delete_private_clients', 'delete_published_clients',
+            'edit_private_clients', 'edit_published_clients'
+        );
+        
+        // Remove from administrator role
+        $admin_role = get_role('administrator');
+        if ($admin_role) {
+            foreach ($capabilities_to_remove as $cap) {
+                $admin_role->remove_cap($cap);
+            }
+        }
+        
+        // Remove from kunden role
+        $kunden_role = get_role('kunden');
+        if ($kunden_role) {
+            foreach ($capabilities_to_remove as $cap) {
+                $kunden_role->remove_cap($cap);
+            }
+        }
+    }
+    
+    /**
+     * Show notice after deactivation
+     */
+    public function deactivation_notice() {
+        $deactivated_time = get_option('rt_employee_manager_deactivated');
+        
+        // Show notice for 5 minutes after deactivation
+        if ($deactivated_time && (time() - $deactivated_time) < 300) {
+            echo '<div class="notice notice-info is-dismissible">';
+            echo '<p><strong>RT Employee Manager:</strong> ';
+            echo __('Plugin has been deactivated. Custom post types (Angestellte, Kunden) and related functionality are now disabled. You may need to refresh the page to see changes.', 'rt-employee-manager');
+            echo '</p></div>';
+            
+            // Clear the flag after showing the notice
+            delete_option('rt_employee_manager_deactivated');
+        }
     }
     
     private function create_tables() {
@@ -195,5 +286,25 @@ class RT_Employee_Manager {
     }
 }
 
-// Initialize the plugin
-RT_Employee_Manager::get_instance();
+// Only initialize the plugin if it's actually active
+if (!function_exists('is_plugin_active')) {
+    include_once(ABSPATH . 'wp-admin/includes/plugin.php');
+}
+
+if (is_plugin_active(plugin_basename(__FILE__))) {
+    RT_Employee_Manager::get_instance();
+} else {
+    // Plugin is deactivated but file is loaded - force clean rewrite rules
+    add_action('admin_init', function() {
+        if (get_option('rewrite_rules') && strpos(get_option('rewrite_rules'), 'angestellte') !== false) {
+            flush_rewrite_rules();
+            
+            // Show notice that cleanup was performed
+            add_action('admin_notices', function() {
+                echo '<div class="notice notice-success is-dismissible">';
+                echo '<p><strong>RT Employee Manager:</strong> Cleaned up cached rewrite rules. Custom post types should now be removed.</p>';
+                echo '</div>';
+            });
+        }
+    });
+}

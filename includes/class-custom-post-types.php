@@ -7,6 +7,11 @@ if (!defined('ABSPATH')) {
 class RT_Employee_Manager_Custom_Post_Types {
     
     public function __construct() {
+        // Only initialize if the plugin is active
+        if (!$this->is_plugin_active()) {
+            return;
+        }
+        
         add_action('init', array($this, 'register_post_types'));
         
         // Add query filters for kunden users to only see their own employees
@@ -25,7 +30,36 @@ class RT_Employee_Manager_Custom_Post_Types {
         add_filter('post_row_actions', array($this, 'add_custom_row_actions'), 10, 2);
     }
     
+    /**
+     * Check if plugin is actually active
+     */
+    private function is_plugin_active() {
+        // Check if we're in admin and the function exists
+        if (!function_exists('is_plugin_active')) {
+            include_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        return is_plugin_active('employee-manager/rt-employee-manager.php');
+    }
+    
+    /**
+     * Static helper to check if plugin is active
+     */
+    private static function check_plugin_active() {
+        // Check if we're in admin and the function exists
+        if (!function_exists('is_plugin_active')) {
+            include_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        }
+        
+        return is_plugin_active('employee-manager/rt-employee-manager.php');
+    }
+    
     public static function register_post_types() {
+        // Only register CPTs if the plugin is actually active
+        if (!self::check_plugin_active()) {
+            return;
+        }
+        
         // Register Angestellte (Employee) post type
         $args = array(
             'label' => __('Angestellte', 'rt-employee-manager'),
