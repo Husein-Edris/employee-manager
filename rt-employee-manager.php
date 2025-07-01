@@ -133,6 +133,9 @@ class RT_Employee_Manager {
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-employee-dashboard.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-admin-settings.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-security.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-public-registration.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-registration-admin.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-login-redirect.php';
     }
     
     private function init_components() {
@@ -148,6 +151,9 @@ class RT_Employee_Manager {
         new RT_Employee_Manager_Employee_Dashboard();
         new RT_Employee_Manager_Admin_Settings();
         new RT_Employee_Manager_Security();
+        new RT_Employee_Manager_Public_Registration();
+        new RT_Employee_Manager_Registration_Admin();
+        new RT_Employee_Manager_Login_Redirect();
     }
     
     public function activate() {
@@ -266,6 +272,40 @@ class RT_Employee_Manager {
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+        
+        // Pending registrations table
+        $table_name = $wpdb->prefix . 'rt_pending_registrations';
+        
+        $sql = "CREATE TABLE $table_name (
+            id int(11) NOT NULL AUTO_INCREMENT,
+            company_name varchar(255) NOT NULL,
+            company_email varchar(255) NOT NULL,
+            company_phone varchar(50),
+            uid_number varchar(50),
+            company_street varchar(255),
+            company_postcode varchar(20),
+            company_city varchar(100),
+            company_country varchar(100),
+            contact_first_name varchar(100) NOT NULL,
+            contact_last_name varchar(100) NOT NULL,
+            contact_email varchar(255) NOT NULL,
+            status varchar(20) DEFAULT 'pending',
+            submitted_at datetime DEFAULT CURRENT_TIMESTAMP,
+            approved_at datetime,
+            approved_by int(11),
+            rejection_reason text,
+            ip_address varchar(45),
+            user_agent text,
+            gravity_form_entry_id int(11),
+            PRIMARY KEY (id),
+            KEY status (status),
+            KEY company_email (company_email),
+            KEY contact_email (contact_email),
+            KEY submitted_at (submitted_at),
+            KEY gravity_form_entry_id (gravity_form_entry_id)
+        ) $charset_collate;";
+        
+        dbDelta($sql);
     }
     
     private function set_default_options() {
@@ -274,6 +314,7 @@ class RT_Employee_Manager {
             'admin_email' => get_option('admin_email'),
             'employee_form_id' => '1',
             'client_form_id' => '3',
+            'registration_form_id' => '3', // Form ID for company registration at /firmen-registrierung/
             'enable_logging' => '1',
             'enable_svnr_validation' => '1'
         );

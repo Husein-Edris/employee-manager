@@ -191,6 +191,67 @@ class RT_Employee_Manager_Admin_Settings {
                     </div>
                 </div>
                 
+                <!-- Pending Registrations (Admin Only) -->
+                <?php if ($is_admin): ?>
+                    <?php $pending_registrations = $this->get_pending_registrations(); ?>
+                    <?php if (!empty($pending_registrations)): ?>
+                        <div class="rt-pending-registrations">
+                            <h2>
+                                <?php _e('Wartende Registrierungen', 'rt-employee-manager'); ?>
+                                <span class="count">(<?php echo count($pending_registrations); ?>)</span>
+                            </h2>
+                            <div class="rt-registration-list">
+                                <table class="wp-list-table widefat fixed striped">
+                                    <thead>
+                                        <tr>
+                                            <th><?php _e('Firma', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('Eingereicht', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('Aktionen', 'rt-employee-manager'); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach (array_slice($pending_registrations, 0, 5) as $registration): ?>
+                                            <tr>
+                                                <td>
+                                                    <strong><?php echo esc_html($registration->company_name); ?></strong>
+                                                    <?php if ($registration->uid_number): ?>
+                                                        <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
+                                                </td>
+                                                <td>
+                                                    <?php echo esc_html($registration->company_email); ?>
+                                                </td>
+                                                <td>
+                                                    <?php echo wp_date(get_option('date_format'), strtotime($registration->submitted_at)); ?>
+                                                    <br><small><?php echo human_time_diff(strtotime($registration->submitted_at)); ?> ago</small>
+                                                </td>
+                                                <td>
+                                                    <a href="<?php echo admin_url('admin.php?page=rt-employee-manager-registrations'); ?>" class="button button-small">
+                                                        <?php _e('Prüfen', 'rt-employee-manager'); ?>
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                
+                                <?php if (count($pending_registrations) > 5): ?>
+                                    <p class="rt-view-all">
+                                        <a href="<?php echo admin_url('admin.php?page=rt-employee-manager-registrations'); ?>" class="button">
+                                            <?php printf(__('Alle %d Registrierungen anzeigen', 'rt-employee-manager'), count($pending_registrations)); ?>
+                                        </a>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+                
                 <!-- Recent Activity -->
                 <div class="rt-recent-activity">
                     <h2><?php _e('Neueste Mitarbeiter', 'rt-employee-manager'); ?></h2>
@@ -384,6 +445,33 @@ class RT_Employee_Manager_Admin_Settings {
         
         .rt-status-error {
             color: #dc3232;
+        }
+        
+        .rt-pending-registrations {
+            margin: 20px 0;
+            background: #fff;
+            border: 1px solid #c3c4c7;
+            border-radius: 4px;
+            padding: 20px;
+        }
+        
+        .rt-pending-registrations h2 {
+            margin: 0 0 15px 0;
+            color: #1d2327;
+        }
+        
+        .rt-pending-registrations .count {
+            background: #d63638;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 8px;
+            font-size: 0.8em;
+            font-weight: normal;
+        }
+        
+        .rt-view-all {
+            text-align: center;
+            margin: 15px 0 0 0;
         }
         </style>
         <?php
@@ -810,5 +898,23 @@ class RT_Employee_Manager_Admin_Settings {
         
         // Mark as fixed
         update_option('rt_missing_kunde_posts_fixed', true);
+    }
+    
+    /**
+     * Get pending registrations for admin dashboard
+     */
+    private function get_pending_registrations() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'rt_pending_registrations';
+        
+        // Check if table exists
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
+            return array();
+        }
+        
+        return $wpdb->get_results(
+            "SELECT * FROM {$table_name} WHERE status = 'pending' ORDER BY submitted_at DESC LIMIT 10"
+        );
     }
 }

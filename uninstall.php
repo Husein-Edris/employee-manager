@@ -98,6 +98,9 @@ function rt_employee_manager_uninstall() {
     $table_name = $wpdb->prefix . 'rt_employee_logs';
     $wpdb->query("DROP TABLE IF EXISTS {$table_name}");
     
+    $table_name = $wpdb->prefix . 'rt_pending_registrations';
+    $wpdb->query("DROP TABLE IF EXISTS {$table_name}");
+    
     // Clear all caches
     wp_cache_flush();
     flush_rewrite_rules();
