@@ -16,33 +16,24 @@ class RT_Employee_Manager_Public_Registration {
      * Handle Gravity Forms company registration submission
      */
     public function handle_gravity_forms_registration($entry, $form) {
-        // Debug log all form submissions
-        error_log('RT Employee Manager: Form submission detected - Form ID: ' . $form['id'] . ', Title: ' . $form['title']);
-        error_log('RT Employee Manager: Entry data: ' . print_r($entry, true));
-        error_log('RT Employee Manager: Form fields: ' . print_r($form['fields'], true));
-        
         // Check if this is the company registration form
         if (!$this->is_company_registration_form($form)) {
-            error_log('RT Employee Manager: Form not recognized as company registration form');
             return;
         }
         
-        error_log('RT Employee Manager: Confirmed company registration form');
+        // Create pending registration record for manual approval
+        // Note: Even if user was created by form, we still want manual approval workflow
+        $registration_id = $this->create_pending_registration_from_entry($entry);
         
-        // Don't process if user was successfully registered (handled by user registration hook)
-        if (!empty($entry['created_by'])) {
-            error_log('RT Employee Manager: User was created, will be handled by user registration hook');
-            return;
-        }
-        
-        // Create pending registration record
-        error_log('RT Employee Manager: Creating pending registration record');
-        $result = $this->create_pending_registration_from_entry($entry);
-        
-        if ($result) {
-            error_log('RT Employee Manager: Successfully created pending registration with ID: ' . $result);
-        } else {
-            error_log('RT Employee Manager: Failed to create pending registration');
+        if ($registration_id && !empty($entry['created_by'])) {
+            // Store the user ID for later approval process
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'rt_pending_registrations';
+            $wpdb->update(
+                $table_name,
+                array('created_user_id' => $entry['created_by']),
+                array('id' => $registration_id)
+            );
         }
     }
     
@@ -82,13 +73,7 @@ class RT_Employee_Manager_Public_Registration {
         
         $table_name = $wpdb->prefix . 'rt_pending_registrations';
         
-        // Debug: Log all entry field values to see what's available
-        error_log('RT Employee Manager: Mapping entry fields:');
-        foreach ($entry as $key => $value) {
-            if (is_numeric($key)) {
-                error_log("Field {$key}: " . $value);
-            }
-        }
+        // Map entry fields to registration data
         
         // Map Gravity Forms fields to our database structure
         // Note: We'll use a more flexible mapping approach
@@ -115,42 +100,36 @@ class RT_Employee_Manager_Public_Registration {
                     }
                 }
                 
-                error_log("Field {$field_id} (Label: {$field_label}): {$value}");
+                // Process field mapping
                 
-                // Map fields based on labels
-                if (strpos($field_label, 'firma') !== false || strpos($field_label, 'company') !== false) {
+                // Map fields based on both labels and known field IDs
+                if ($field_id == '23' || strpos($field_label, 'firma') !== false || strpos($field_label, 'company') !== false) {
                     $registration_data['company_name'] = sanitize_text_field($value);
-                } elseif (strpos($field_label, 'email') !== false || strpos($field_label, 'e-mail') !== false) {
+                } elseif ($field_id == '52' || strpos($field_label, 'email') !== false || strpos($field_label, 'e-mail') !== false) {
                     $registration_data['company_email'] = sanitize_email($value);
                     $registration_data['contact_email'] = sanitize_email($value);
-                } elseif (strpos($field_label, 'phone') !== false || strpos($field_label, 'telefon') !== false) {
+                } elseif ($field_id == '10' || strpos($field_label, 'phone') !== false || strpos($field_label, 'telefon') !== false) {
                     $registration_data['company_phone'] = sanitize_text_field($value);
-                } elseif (strpos($field_label, 'uid') !== false) {
+                } elseif ($field_id == '24' || strpos($field_label, 'uid') !== false) {
                     $registration_data['uid_number'] = sanitize_text_field($value);
                 } elseif (strpos($field_label, 'vorname') !== false || strpos($field_label, 'first') !== false) {
                     $registration_data['contact_first_name'] = sanitize_text_field($value);
                 } elseif (strpos($field_label, 'nachname') !== false || strpos($field_label, 'last') !== false) {
                     $registration_data['contact_last_name'] = sanitize_text_field($value);
-                } elseif (strpos($field_label, 'straße') !== false || strpos($field_label, 'street') !== false) {
+                } elseif ($field_id == '21.1' || strpos($field_label, 'straße') !== false || strpos($field_label, 'street') !== false) {
                     $registration_data['company_street'] = sanitize_text_field($value);
-                } elseif (strpos($field_label, 'plz') !== false || strpos($field_label, 'postcode') !== false || strpos($field_label, 'zip') !== false) {
+                } elseif ($field_id == '21.5' || strpos($field_label, 'plz') !== false || strpos($field_label, 'postcode') !== false || strpos($field_label, 'zip') !== false) {
                     $registration_data['company_postcode'] = sanitize_text_field($value);
-                } elseif (strpos($field_label, 'stadt') !== false || strpos($field_label, 'city') !== false || strpos($field_label, 'ort') !== false) {
+                } elseif ($field_id == '21.3' || strpos($field_label, 'stadt') !== false || strpos($field_label, 'city') !== false || strpos($field_label, 'ort') !== false) {
                     $registration_data['company_city'] = sanitize_text_field($value);
-                } elseif (strpos($field_label, 'land') !== false || strpos($field_label, 'country') !== false) {
+                } elseif ($field_id == '21.6' || strpos($field_label, 'land') !== false || strpos($field_label, 'country') !== false) {
                     $registration_data['company_country'] = sanitize_text_field($value);
                 }
             }
         }
         
         // Ensure we have required fields
-        if (empty($registration_data['company_name'])) {
-            error_log('RT Employee Manager: No company name found in entry');
-            return false;
-        }
-        
-        if (empty($registration_data['company_email'])) {
-            error_log('RT Employee Manager: No company email found in entry');
+        if (empty($registration_data['company_name']) || empty($registration_data['company_email'])) {
             return false;
         }
         
@@ -165,19 +144,15 @@ class RT_Employee_Manager_Public_Registration {
             $registration_data['company_country'] = 'Austria';
         }
         
-        error_log('RT Employee Manager: Final registration data: ' . print_r($registration_data, true));
-        
         $result = $wpdb->insert($table_name, $registration_data);
         
         if ($result !== false) {
             $registration_id = $wpdb->insert_id;
             
-            // Notify admin about new registration
-            $this->notify_admin_new_registration($registration_id);
+            // Notify admin about new registration - handled by Gravity Forms notifications
+            // $this->notify_admin_new_registration($registration_id);
             
             return $registration_id;
-        } else {
-            error_log('RT Employee Manager: Database insert failed: ' . $wpdb->last_error);
         }
         
         return false;
@@ -212,7 +187,7 @@ class RT_Employee_Manager_Public_Registration {
         $table_name = $wpdb->prefix . 'rt_pending_registrations';
         
         // Update registration status
-        $wpdb->update(
+        $result = $wpdb->update(
             $table_name,
             array(
                 'status' => 'approved',
@@ -224,6 +199,7 @@ class RT_Employee_Manager_Public_Registration {
         
         // Create kunde post if it doesn't exist
         $kunde_post_id = get_user_meta($user_id, 'kunde_post_id', true);
+        
         if (!$kunde_post_id) {
             $registration = $this->get_registration_by_id($registration_id);
             if ($registration) {

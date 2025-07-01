@@ -16,33 +16,38 @@ class RT_Employee_Manager_Admin_Settings {
      * Add admin menu
      */
     public function add_admin_menu() {
-        add_menu_page(
+        // Main menu page - accessible to both admins and kunden
+        $main_page = add_menu_page(
             __('RT Employee Manager', 'rt-employee-manager'),
             __('Employee Manager', 'rt-employee-manager'),
-            'read',  // Changed from 'manage_options' to allow kunden access
+            'read',  // Allow kunden access
             'rt-employee-manager',
             array($this, 'admin_page'),
             'dashicons-groups',
             26
         );
         
-        add_submenu_page(
-            'rt-employee-manager',
-            __('Einstellungen', 'rt-employee-manager'),
-            __('Einstellungen', 'rt-employee-manager'),
-            'manage_options',
-            'rt-employee-manager-settings',
-            array($this, 'settings_page')
-        );
-        
-        add_submenu_page(
-            'rt-employee-manager',
-            __('Logs', 'rt-employee-manager'),
-            __('Logs', 'rt-employee-manager'),
-            'manage_options',
-            'rt-employee-manager-logs',
-            array($this, 'logs_page')
-        );
+        // Settings submenu - admin only
+        if (current_user_can('manage_options')) {
+            add_submenu_page(
+                'rt-employee-manager',
+                __('Einstellungen', 'rt-employee-manager'),
+                __('Einstellungen', 'rt-employee-manager'),
+                'manage_options',
+                'rt-employee-manager-settings',
+                array($this, 'settings_page')
+            );
+            
+            // Logs submenu - admin only
+            add_submenu_page(
+                'rt-employee-manager',
+                __('Logs', 'rt-employee-manager'),
+                __('Logs', 'rt-employee-manager'),
+                'manage_options',
+                'rt-employee-manager-logs',
+                array($this, 'logs_page')
+            );
+        }
     }
     
     /**
@@ -63,6 +68,11 @@ class RT_Employee_Manager_Admin_Settings {
      * Main admin page
      */
     public function admin_page() {
+        // Check user permissions
+        if (!current_user_can('read')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
         // Debug: Fix missing metadata for test employee post
         $this->fix_test_employee_metadata();
         
@@ -481,6 +491,11 @@ class RT_Employee_Manager_Admin_Settings {
      * Settings page
      */
     public function settings_page() {
+        // Check user permissions
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
         if (isset($_POST['submit'])) {
             check_admin_referer('rt_employee_manager_settings');
             
@@ -608,6 +623,11 @@ class RT_Employee_Manager_Admin_Settings {
      * Logs page
      */
     public function logs_page() {
+        // Check user permissions
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
         global $wpdb;
         
         $table_name = $wpdb->prefix . 'rt_employee_logs';

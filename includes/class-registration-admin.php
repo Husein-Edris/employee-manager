@@ -17,20 +17,28 @@ class RT_Employee_Manager_Registration_Admin {
      * Add admin menu for registration management
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'rt-employee-manager',
-            __('Pending Registrations', 'rt-employee-manager'),
-            __('Registrations', 'rt-employee-manager'),
-            'manage_options',
-            'rt-employee-manager-registrations',
-            array($this, 'admin_page')
-        );
+        // Only add this menu for administrators
+        if (current_user_can('manage_options')) {
+            add_submenu_page(
+                'rt-employee-manager',
+                __('Company Registrations', 'rt-employee-manager'),
+                __('Registrations', 'rt-employee-manager'),
+                'manage_options',
+                'rt-employee-manager-registrations',
+                array($this, 'admin_page')
+            );
+        }
     }
     
     /**
      * Admin page for managing registrations
      */
     public function admin_page() {
+        // Check user permissions - only administrators can access this page
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
         $tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'pending';
         ?>
         <div class="wrap">
@@ -462,11 +470,50 @@ class RT_Employee_Manager_Registration_Admin {
         }
         
         try {
-            // Create WordPress user and kunde post
-            $result = $this->create_approved_client($registration);
-            
-            if (is_wp_error($result)) {
-                wp_send_json_error(array('message' => $result->get_error_message()));
+            // Check if user was already created by the form AND it's not an admin user
+            if (!empty($registration->created_user_id)) {
+                $user_id = $registration->created_user_id;
+                $user = get_user_by('ID', $user_id);
+                
+                // Only use existing user if it's not an administrator (avoid using admin account)
+                if ($user && !in_array('administrator', $user->roles) && $user->user_email === $registration->company_email) {
+                    // User already exists and is not admin, just approve and create kunde post
+                    
+                    // Ensure user has correct role
+                    if (!in_array('kunden', $user->roles)) {
+                        $user->set_role('kunden');
+                    }
+                    
+                    // Create kunde post if it doesn't exist
+                    $kunde_post_id = get_user_meta($user_id, 'kunde_post_id', true);
+                    if (!$kunde_post_id) {
+                        $kunde_post_id = $this->create_kunde_post_for_existing_user($user_id, $registration);
+                    }
+                    
+                    // Update user meta with company information
+                    $this->update_user_meta_from_registration($user_id, $registration);
+                    
+                    $result = array(
+                        'user_id' => $user_id,
+                        'post_id' => $kunde_post_id,
+                        'password' => null // User already has password
+                    );
+                } else {
+                    // Admin user or email mismatch - create new user instead
+                    $result = $this->create_approved_client($registration);
+                    
+                    if (is_wp_error($result)) {
+                        wp_send_json_error(array('message' => $result->get_error_message()));
+                    }
+                }
+                
+            } else {
+                // Create new WordPress user and kunde post
+                $result = $this->create_approved_client($registration);
+                
+                if (is_wp_error($result)) {
+                    wp_send_json_error(array('message' => $result->get_error_message()));
+                }
             }
             
             // Update registration status
@@ -476,7 +523,7 @@ class RT_Employee_Manager_Registration_Admin {
             $this->send_approval_email($registration, $result);
             
             wp_send_json_success(array(
-                'message' => __('Registration approved successfully. User account created and approval email sent.', 'rt-employee-manager')
+                'message' => __('Registration approved successfully. Approval email sent.', 'rt-employee-manager')
             ));
             
         } catch (Exception $e) {
@@ -646,6 +693,64 @@ class RT_Employee_Manager_Registration_Admin {
     }
     
     /**
+     * Create kunde post for existing user
+     */
+    private function create_kunde_post_for_existing_user($user_id, $registration) {
+        $post_data = array(
+            'post_title' => $registration->company_name,
+            'post_type' => 'kunde',
+            'post_status' => 'publish',
+            'post_author' => $user_id,
+            'meta_input' => array(
+                'company_name' => $registration->company_name,
+                'uid_number' => $registration->uid_number,
+                'phone' => $registration->company_phone,
+                'email' => $registration->company_email,
+                'registration_date' => current_time('d.m.Y H:i'),
+                'user_id' => $user_id,
+                'approved_from_registration' => $registration->id
+            )
+        );
+        
+        $post_id = wp_insert_post($post_data);
+        
+        if (!is_wp_error($post_id)) {
+            // Link user to kunde post
+            update_user_meta($user_id, 'kunde_post_id', $post_id);
+            return $post_id;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Update user meta from registration data
+     */
+    private function update_user_meta_from_registration($user_id, $registration) {
+        $meta_updates = array(
+            'company_name' => $registration->company_name,
+            'uid_number' => $registration->uid_number,
+            'phone' => $registration->company_phone,
+            'address_street' => $registration->company_street,
+            'address_postcode' => $registration->company_postcode,
+            'address_city' => $registration->company_city,
+            'address_country' => $registration->company_country
+        );
+        
+        foreach ($meta_updates as $meta_key => $meta_value) {
+            if (!empty($meta_value)) {
+                update_user_meta($user_id, $meta_key, $meta_value);
+            }
+        }
+        
+        // Update display name to company name
+        wp_update_user(array(
+            'ID' => $user_id,
+            'display_name' => $registration->company_name
+        ));
+    }
+    
+    /**
      * Send approval email
      */
     private function send_approval_email($registration, $result) {
@@ -655,7 +760,9 @@ class RT_Employee_Manager_Registration_Admin {
         
         $subject = sprintf(__('[%s] Account Approved - Welcome!', 'rt-employee-manager'), get_bloginfo('name'));
         
-        $message = sprintf(__('
+        if (!empty($result['password'])) {
+            // New account with generated password
+            $message = sprintf(__('
 Hello %s,
 
 Great news! Your company registration for %s has been approved!
@@ -681,14 +788,47 @@ Welcome to %s!
 ---
 This email was generated automatically.
 ', 'rt-employee-manager'),
-            $registration->contact_first_name,
-            $registration->company_name,
-            $secure_login_url,
-            $registration->company_email,
-            $result['password'],
-            $regular_login_url,
-            get_bloginfo('name')
-        );
+                $registration->contact_first_name,
+                $registration->company_name,
+                $secure_login_url,
+                $registration->company_email,
+                $result['password'],
+                $regular_login_url,
+                get_bloginfo('name')
+            );
+        } else {
+            // Existing account, no password needed
+            $message = sprintf(__('
+Hello %s,
+
+Great news! Your company registration for %s has been approved!
+
+You can access your employee management dashboard immediately using this secure link:
+%s
+
+This secure link is valid for 72 hours. After that, you can log in normally with your existing credentials at:
+%s
+
+What you can do next:
+✓ Add your employees to the system
+✓ Manage employee records and status
+✓ Track active and inactive employees
+✓ Update your company information
+
+Need help getting started? Reply to this email and we\'ll assist you.
+
+Welcome to %s!
+
+---
+This email was generated automatically.
+', 'rt-employee-manager'),
+                $registration->contact_first_name,
+                $registration->company_name,
+                $secure_login_url,
+                $regular_login_url,
+                get_bloginfo('name')
+            );
+        }
         
         return wp_mail($registration->company_email, $subject, $message);
     }
@@ -729,7 +869,8 @@ This email was generated automatically.
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
-        if ($hook !== 'employee-manager_page_rt-employee-manager-registrations') {
+        // Check if we're on the registrations page
+        if (strpos($hook, 'rt-employee-manager-registrations') === false) {
             return;
         }
         

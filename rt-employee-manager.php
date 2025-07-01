@@ -36,6 +36,34 @@ class RT_Employee_Manager {
         return self::$instance;
     }
     
+    
+    /**
+     * Log emails locally instead of sending them
+     */
+    public function log_emails_locally($args) {
+        $log_entry = array(
+            'timestamp' => current_time('Y-m-d H:i:s'),
+            'to' => is_array($args['to']) ? implode(', ', $args['to']) : $args['to'],
+            'subject' => $args['subject'],
+            'message' => $args['message'],
+            'headers' => is_array($args['headers']) ? implode(', ', $args['headers']) : $args['headers']
+        );
+        
+        $log_file = WP_CONTENT_DIR . '/rt-email-log.txt';
+        $log_content = "=== EMAIL LOG ===\n";
+        $log_content .= "Time: " . $log_entry['timestamp'] . "\n";
+        $log_content .= "To: " . $log_entry['to'] . "\n";
+        $log_content .= "Subject: " . $log_entry['subject'] . "\n";
+        $log_content .= "Headers: " . $log_entry['headers'] . "\n";
+        $log_content .= "Message:\n" . $log_entry['message'] . "\n";
+        $log_content .= "=================\n\n";
+        
+        file_put_contents($log_file, $log_content, FILE_APPEND | LOCK_EX);
+        
+        // Return false to prevent actual sending in local environment
+        return false;
+    }
+    
     private function __construct() {
         $this->init_hooks();
     }
@@ -47,6 +75,17 @@ class RT_Employee_Manager {
         
         // Add admin notice if plugin was recently deactivated
         add_action('admin_notices', array($this, 'deactivation_notice'));
+        
+        // Disable Gravity Forms rate limiting for development
+        add_filter('gform_entry_limit_exceeded_message', '__return_false');
+        add_filter('gform_form_limit_exceeded', '__return_false');
+        add_filter('gform_enable_duplicate_prevention', '__return_false');
+        add_filter('gform_duplicate_message', '__return_false');
+        
+        // Add email logging for local development
+        if (defined('WP_ENVIRONMENT_TYPE') && WP_ENVIRONMENT_TYPE === 'local') {
+            add_filter('wp_mail', array($this, 'log_emails_locally'));
+        }
     }
     
     public function load_plugin() {
