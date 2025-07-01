@@ -67,10 +67,10 @@ class RT_Employee_Manager {
             return false;
         }
         
-        // Check for ACF
-        if (!function_exists('acf')) {
-            return false;
-        }
+        // Check for ACF (optional - will work without it)
+        // if (!function_exists('acf')) {
+        //     return false;
+        // }
         
         // Check for Advanced Post Creation
         if (!class_exists('GF_Advanced_Post_Creation')) {
@@ -87,9 +87,9 @@ class RT_Employee_Manager {
             $missing[] = 'Gravity Forms';
         }
         
-        if (!function_exists('acf')) {
-            $missing[] = 'Advanced Custom Fields (ACF)';
-        }
+        // if (!function_exists('acf')) {
+        //     $missing[] = 'Advanced Custom Fields (ACF)';
+        // }
         
         if (!class_exists('GF_Advanced_Post_Creation')) {
             $missing[] = 'Gravity Forms Advanced Post Creation';
@@ -119,13 +119,21 @@ class RT_Employee_Manager {
         new RT_Employee_Manager_Custom_Post_Types();
         new RT_Employee_Manager_Gravity_Forms_Integration();
         new RT_Employee_Manager_User_Fields();
-        new RT_Employee_Manager_ACF_Integration();
+        
+        // Only load ACF integration if ACF is active
+        if (function_exists('acf')) {
+            new RT_Employee_Manager_ACF_Integration();
+        }
+        
         new RT_Employee_Manager_Employee_Dashboard();
         new RT_Employee_Manager_Admin_Settings();
         new RT_Employee_Manager_Security();
     }
     
     public function activate() {
+        // Load includes first
+        $this->load_includes();
+        
         // Create custom post types
         RT_Employee_Manager_Custom_Post_Types::register_post_types();
         

@@ -150,6 +150,7 @@ class RT_Employee_Manager_Custom_Post_Types {
         if (!get_role('kunden')) {
             add_role('kunden', __('Kunden', 'rt-employee-manager'), array(
                 'read' => true,
+                'edit_posts' => true,  // Added for dashboard access
                 'create_employees' => true,
                 'edit_employees' => true,
                 'delete_employees' => true,

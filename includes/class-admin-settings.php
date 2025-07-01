@@ -19,7 +19,7 @@ class RT_Employee_Manager_Admin_Settings {
         add_menu_page(
             __('RT Employee Manager', 'rt-employee-manager'),
             __('Employee Manager', 'rt-employee-manager'),
-            'manage_options',
+            'read',  // Changed from 'manage_options' to allow kunden access
             'rt-employee-manager',
             array($this, 'admin_page'),
             'dashicons-groups',
@@ -63,16 +63,57 @@ class RT_Employee_Manager_Admin_Settings {
      * Main admin page
      */
     public function admin_page() {
-        $total_employees = wp_count_posts('angestellte')->publish;
-        $total_clients = wp_count_posts('kunde')->publish;
+        // Debug: Fix missing metadata for test employee post
+        $this->fix_test_employee_metadata();
+        
+        $current_user = wp_get_current_user();
+        $is_admin = current_user_can('manage_options');
+        $is_kunden = in_array('kunden', $current_user->roles);
+        
+        if ($is_admin) {
+            // Admin sees all data
+            $total_employees = wp_count_posts('angestellte')->publish;
+            $total_clients = wp_count_posts('kunde')->publish;
+        } else {
+            // Kunden users see only their own employees
+            $args = array(
+                'post_type' => 'angestellte',
+                'post_status' => 'publish',
+                'posts_per_page' => -1,
+                'meta_query' => array(
+                    array(
+                        'key' => 'employer_id',
+                        'value' => $current_user->ID,
+                        'compare' => '='
+                    )
+                )
+            );
+            $user_employees = get_posts($args);
+            $total_employees = count($user_employees);
+            $total_clients = 1; // The current user's company
+        }
         
         // Get recent activity
-        $recent_employees = get_posts(array(
+        $recent_args = array(
             'post_type' => 'angestellte',
+            'post_status' => 'publish',
             'posts_per_page' => 5,
             'orderby' => 'date',
             'order' => 'DESC'
-        ));
+        );
+        
+        // If not admin, only show user's employees
+        if (!$is_admin) {
+            $recent_args['meta_query'] = array(
+                array(
+                    'key' => 'employer_id',
+                    'value' => $current_user->ID,
+                    'compare' => '='
+                )
+            );
+        }
+        
+        $recent_employees = get_posts($recent_args);
         
         ?>
         <div class="wrap">
@@ -81,31 +122,48 @@ class RT_Employee_Manager_Admin_Settings {
             <div class="rt-admin-dashboard">
                 <!-- Statistics -->
                 <div class="rt-admin-stats">
-                    <div class="rt-stat-card">
-                        <h3><?php echo number_format($total_employees); ?></h3>
-                        <p><?php _e('Mitarbeiter gesamt', 'rt-employee-manager'); ?></p>
-                        <a href="<?php echo admin_url('edit.php?post_type=angestellte'); ?>" class="rt-stat-link">
-                            <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
-                        </a>
-                    </div>
-                    
-                    <div class="rt-stat-card">
-                        <h3><?php echo number_format($total_clients); ?></h3>
-                        <p><?php _e('Kunden gesamt', 'rt-employee-manager'); ?></p>
-                        <a href="<?php echo admin_url('edit.php?post_type=kunde'); ?>" class="rt-stat-link">
-                            <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
-                        </a>
-                    </div>
-                    
-                    <div class="rt-stat-card">
-                        <h3><?php echo $this->get_active_employees_count(); ?></h3>
-                        <p><?php _e('Aktive Mitarbeiter', 'rt-employee-manager'); ?></p>
-                    </div>
-                    
-                    <div class="rt-stat-card">
-                        <h3><?php echo $this->get_forms_submissions_today(); ?></h3>
-                        <p><?php _e('Anmeldungen heute', 'rt-employee-manager'); ?></p>
-                    </div>
+                    <?php if ($is_admin): ?>
+                        <!-- Admin sees all stats -->
+                        <div class="rt-stat-card">
+                            <h3><?php echo number_format($total_employees); ?></h3>
+                            <p><?php _e('Mitarbeiter gesamt', 'rt-employee-manager'); ?></p>
+                            <a href="<?php echo admin_url('edit.php?post_type=angestellte'); ?>" class="rt-stat-link">
+                                <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
+                            </a>
+                        </div>
+                        
+                        <div class="rt-stat-card">
+                            <h3><?php echo number_format($total_clients); ?></h3>
+                            <p><?php _e('Kunden gesamt', 'rt-employee-manager'); ?></p>
+                            <a href="<?php echo admin_url('edit.php?post_type=kunde'); ?>" class="rt-stat-link">
+                                <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
+                            </a>
+                        </div>
+                        
+                        <div class="rt-stat-card">
+                            <h3><?php echo $this->get_active_employees_count(); ?></h3>
+                            <p><?php _e('Aktive Mitarbeiter', 'rt-employee-manager'); ?></p>
+                        </div>
+                        
+                        <div class="rt-stat-card">
+                            <h3><?php echo $this->get_forms_submissions_today(); ?></h3>
+                            <p><?php _e('Anmeldungen heute', 'rt-employee-manager'); ?></p>
+                        </div>
+                    <?php else: ?>
+                        <!-- Kunden see only their employee stats -->
+                        <div class="rt-stat-card">
+                            <h3><?php echo number_format($total_employees); ?></h3>
+                            <p><?php _e('Meine Mitarbeiter gesamt', 'rt-employee-manager'); ?></p>
+                            <a href="<?php echo admin_url('edit.php?post_type=angestellte'); ?>" class="rt-stat-link">
+                                <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
+                            </a>
+                        </div>
+                        
+                        <div class="rt-stat-card">
+                            <h3><?php echo $this->get_user_active_employees_count($current_user->ID); ?></h3>
+                            <p><?php _e('Aktive Mitarbeiter', 'rt-employee-manager'); ?></p>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 
                 <!-- Quick Actions -->
@@ -115,15 +173,17 @@ class RT_Employee_Manager_Admin_Settings {
                         <a href="<?php echo admin_url('post-new.php?post_type=angestellte'); ?>" class="button button-primary">
                             <?php _e('Neuen Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
                         </a>
-                        <a href="<?php echo admin_url('post-new.php?post_type=kunde'); ?>" class="button button-secondary">
-                            <?php _e('Neuen Kunde hinzufügen', 'rt-employee-manager'); ?>
-                        </a>
-                        <a href="<?php echo admin_url('admin.php?page=gf_edit_forms'); ?>" class="button button-secondary">
-                            <?php _e('Formulare bearbeiten', 'rt-employee-manager'); ?>
-                        </a>
-                        <a href="<?php echo admin_url('admin.php?page=rt-employee-manager-settings'); ?>" class="button button-secondary">
-                            <?php _e('Einstellungen', 'rt-employee-manager'); ?>
-                        </a>
+                        <?php if ($is_admin): ?>
+                            <a href="<?php echo admin_url('post-new.php?post_type=kunde'); ?>" class="button button-secondary">
+                                <?php _e('Neuen Kunde hinzufügen', 'rt-employee-manager'); ?>
+                            </a>
+                            <a href="<?php echo admin_url('admin.php?page=gf_edit_forms'); ?>" class="button button-secondary">
+                                <?php _e('Formulare bearbeiten', 'rt-employee-manager'); ?>
+                            </a>
+                            <a href="<?php echo admin_url('admin.php?page=rt-employee-manager-settings'); ?>" class="button button-secondary">
+                                <?php _e('Einstellungen', 'rt-employee-manager'); ?>
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 
@@ -186,7 +246,8 @@ class RT_Employee_Manager_Admin_Settings {
                     </div>
                 </div>
                 
-                <!-- System Status -->
+                <?php if ($is_admin): ?>
+                <!-- System Status (Admin only) -->
                 <div class="rt-system-status">
                     <h2><?php _e('Systemstatus', 'rt-employee-manager'); ?></h2>
                     <table class="wp-list-table widefat">
@@ -236,6 +297,7 @@ class RT_Employee_Manager_Admin_Settings {
                         </tbody>
                     </table>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -548,6 +610,26 @@ class RT_Employee_Manager_Admin_Settings {
     }
     
     /**
+     * Get user-specific active employees count
+     */
+    private function get_user_active_employees_count($user_id) {
+        global $wpdb;
+        
+        return $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta} pm_status
+             INNER JOIN {$wpdb->posts} p ON pm_status.post_id = p.ID
+             INNER JOIN {$wpdb->postmeta} pm_employer ON p.ID = pm_employer.post_id
+             WHERE pm_status.meta_key = 'status' 
+             AND pm_status.meta_value = 'active'
+             AND pm_employer.meta_key = 'employer_id'
+             AND pm_employer.meta_value = %d
+             AND p.post_type = 'angestellte'
+             AND p.post_status = 'publish'",
+            $user_id
+        )) ?: 0;
+    }
+    
+    /**
      * Get form submissions today
      */
     private function get_forms_submissions_today() {
@@ -587,5 +669,53 @@ class RT_Employee_Manager_Admin_Settings {
         if (strpos($hook, 'rt-employee-manager') !== false) {
             wp_enqueue_style('rt-employee-manager-admin', RT_EMPLOYEE_MANAGER_PLUGIN_URL . 'assets/css/admin.css', array(), RT_EMPLOYEE_MANAGER_VERSION);
         }
+    }
+    
+    /**
+     * Temporary function to fix test employee metadata
+     */
+    private function fix_test_employee_metadata() {
+        // Only run once - check if already fixed
+        if (get_option('rt_test_employee_fixed')) {
+            return;
+        }
+        
+        // Find the test employee post
+        $posts = get_posts(array(
+            'post_type' => 'angestellte',
+            'post_status' => 'publish',
+            'posts_per_page' => -1
+        ));
+        
+        foreach ($posts as $post) {
+            // Check if metadata is missing
+            $vorname = get_post_meta($post->ID, 'vorname', true);
+            $employer_id = get_post_meta($post->ID, 'employer_id', true);
+            
+            if (empty($vorname) || empty($employer_id)) {
+                // Find a kunden user to assign as employer
+                $kunden_users = get_users(array('role' => 'kunden'));
+                if (!empty($kunden_users)) {
+                    $kunden_user = $kunden_users[0];
+                    
+                    // Set missing metadata based on post title
+                    $title_parts = explode(' ', $post->post_title);
+                    $first_name = isset($title_parts[0]) ? $title_parts[0] : 'Max';
+                    $last_name = isset($title_parts[1]) ? $title_parts[1] : 'Mustermann';
+                    
+                    update_post_meta($post->ID, 'vorname', $first_name);
+                    update_post_meta($post->ID, 'nachname', $last_name);
+                    update_post_meta($post->ID, 'employer_id', $kunden_user->ID);
+                    update_post_meta($post->ID, 'status', 'active');
+                    update_post_meta($post->ID, 'sozialversicherungsnummer', '1234567890');
+                    update_post_meta($post->ID, 'eintrittsdatum', date('d.m.Y'));
+                    
+                    error_log('RT Employee Manager: Fixed metadata for employee post #' . $post->ID);
+                }
+            }
+        }
+        
+        // Mark as fixed
+        update_option('rt_test_employee_fixed', true);
     }
 }

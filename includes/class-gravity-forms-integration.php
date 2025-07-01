@@ -310,7 +310,7 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
     /**
      * Enqueue scripts for SVNR formatting
      */
-    public function enqueue_scripts($form, $is_ajax) {
+    public function enqueue_scripts($form, $is_ajax = false) {
         if ($form['id'] == 1) { // Only for employee form
             wp_enqueue_script(
                 'rt-employee-svnr-formatting',

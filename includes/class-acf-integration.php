@@ -4,23 +4,26 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class RT_Employee_Manager_ACF_Integration {
-    
-    public function __construct() {
+class RT_Employee_Manager_ACF_Integration
+{
+
+    public function __construct()
+    {
         add_action('acf/init', array($this, 'register_field_groups'));
         add_action('acf/save_post', array($this, 'save_post_handler'), 20);
         add_filter('acf/load_value/name=employer_id', array($this, 'load_employer_id'), 10, 3);
         add_filter('acf/update_value/name=employer_id', array($this, 'update_employer_id'), 10, 3);
     }
-    
+
     /**
      * Register ACF field groups programmatically
      */
-    public function register_field_groups() {
+    public function register_field_groups()
+    {
         if (!function_exists('acf_add_local_field_group')) {
             return;
         }
-        
+
         // Employee (Angestellte) field group
         acf_add_local_field_group(array(
             'key' => 'group_angestellte_details',
@@ -260,7 +263,7 @@ class RT_Employee_Manager_ACF_Integration {
             'instruction_placement' => 'label',
             'active' => true,
         ));
-        
+
         // Client (Kunde) field group
         acf_add_local_field_group(array(
             'key' => 'group_kunden_details',
@@ -368,36 +371,38 @@ class RT_Employee_Manager_ACF_Integration {
             'active' => true,
         ));
     }
-    
+
     /**
      * Handle post save for additional processing
      */
-    public function save_post_handler($post_id) {
+    public function save_post_handler($post_id)
+    {
         // Skip if it's not our post types
         if (!in_array(get_post_type($post_id), array('angestellte', 'kunde'))) {
             return;
         }
-        
+
         // Skip revisions and autosaves
         if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) {
             return;
         }
-        
+
         if (get_post_type($post_id) === 'angestellte') {
             $this->process_employee_save($post_id);
         } elseif (get_post_type($post_id) === 'kunde') {
             $this->process_client_save($post_id);
         }
     }
-    
+
     /**
      * Process employee post save
      */
-    private function process_employee_save($post_id) {
+    private function process_employee_save($post_id)
+    {
         // Update post title with employee name
         $vorname = get_field('vorname', $post_id);
         $nachname = get_field('nachname', $post_id);
-        
+
         if ($vorname && $nachname) {
             $title = $vorname . ' ' . $nachname;
             wp_update_post(array(
@@ -405,7 +410,7 @@ class RT_Employee_Manager_ACF_Integration {
                 'post_title' => $title
             ));
         }
-        
+
         // Validate and format SVNR
         $svnr = get_field('sozialversicherungsnummer', $post_id);
         if ($svnr) {
@@ -414,67 +419,71 @@ class RT_Employee_Manager_ACF_Integration {
                 update_field('sozialversicherungsnummer', $cleaned_svnr, $post_id);
             }
         }
-        
+
         // Set employer ID if not set
         $employer_id = get_field('employer_id', $post_id);
         if (empty($employer_id) && is_user_logged_in()) {
             update_field('employer_id', get_current_user_id(), $post_id);
         }
-        
+
         // Log the save
         $this->log_employee_update($post_id);
     }
-    
+
     /**
      * Process client post save
      */
-    private function process_client_save($post_id) {
+    private function process_client_save($post_id)
+    {
         // Update post title with company name
         $company_name = get_field('company_name', $post_id);
-        
+
         if ($company_name) {
             wp_update_post(array(
                 'ID' => $post_id,
                 'post_title' => $company_name
             ));
         }
-        
+
         // Set registration date if not set
         $registration_date = get_field('registration_date', $post_id);
         if (empty($registration_date)) {
             update_field('registration_date', current_time('d.m.Y H:i'), $post_id);
         }
     }
-    
+
     /**
      * Load employer ID default value
      */
-    public function load_employer_id($value, $post_id, $field) {
+    public function load_employer_id($value, $post_id, $field)
+    {
         if (empty($value) && is_user_logged_in()) {
             return get_current_user_id();
         }
         return $value;
     }
-    
+
     /**
      * Update employer ID with current user if empty
      */
-    public function update_employer_id($value, $post_id, $field) {
+    public function update_employer_id($value, $post_id, $field)
+    {
         if (empty($value) && is_user_logged_in()) {
             return get_current_user_id();
         }
         return $value;
     }
-    
+
     /**
      * Log employee update
      */
-    private function log_employee_update($post_id) {
+    private function log_employee_update($post_id)
+    {
         if (get_option('rt_employee_manager_enable_logging')) {
             global $wpdb;
-            
+
             $table_name = $wpdb->prefix . 'rt_employee_logs';
-            
+
             $wpdb->insert(
                 $table_name,
                 array(
@@ -489,13 +498,14 @@ class RT_Employee_Manager_ACF_Integration {
             );
         }
     }
-    
+
     /**
      * Get employee statistics for a user
      */
-    public function get_user_employee_stats($user_id) {
+    public function get_user_employee_stats($user_id)
+    {
         global $wpdb;
-        
+
         $stats = $wpdb->get_row($wpdb->prepare(
             "SELECT 
                 COUNT(*) as total,
@@ -511,7 +521,7 @@ class RT_Employee_Manager_ACF_Integration {
              AND p.post_status = 'publish'",
             $user_id
         ), ARRAY_A);
-        
+
         return $stats;
     }
 }

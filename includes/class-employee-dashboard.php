@@ -34,8 +34,24 @@ class RT_Employee_Manager_Employee_Dashboard {
         $current_user = wp_get_current_user();
         
         // Check if user has permission
-        if (!in_array('kunden', $current_user->roles) && !current_user_can('manage_options')) {
-            return '<p>' . __('Sie haben keine Berechtigung, dieses Dashboard zu nutzen.', 'rt-employee-manager') . '</p>';
+        $user_roles = $current_user->roles;
+        $has_kunden_role = in_array('kunden', $user_roles);
+        $has_admin_cap = current_user_can('manage_options');
+        
+        // Debug output for testing
+        if (current_user_can('edit_posts')) {
+            $debug_info = sprintf(
+                'DEBUG - User: %s | Roles: %s | Has Kunden: %s | Has Admin: %s',
+                $current_user->user_email,
+                implode(', ', $user_roles),
+                $has_kunden_role ? 'Yes' : 'No',
+                $has_admin_cap ? 'Yes' : 'No'
+            );
+            $debug_output = '<div style="background: #ffeb3b; padding: 10px; margin: 10px 0; border: 1px solid #ccc;">' . $debug_info . '</div>';
+        }
+        
+        if (!$has_kunden_role && !$has_admin_cap) {
+            return (isset($debug_output) ? $debug_output : '') . '<p>' . __('Sie haben keine Berechtigung, dieses Dashboard zu nutzen.', 'rt-employee-manager') . '</p>';
         }
         
         ob_start();
