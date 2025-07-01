@@ -154,9 +154,11 @@ class RT_Employee_Manager_Admin_Settings {
                         <div class="rt-stat-card">
                             <h3><?php echo number_format($total_employees); ?></h3>
                             <p><?php _e('Meine Mitarbeiter gesamt', 'rt-employee-manager'); ?></p>
-                            <a href="<?php echo admin_url('edit.php?post_type=angestellte'); ?>" class="rt-stat-link">
-                                <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
-                            </a>
+                            <?php if (current_user_can('edit_employees')): ?>
+                                <a href="<?php echo admin_url('edit.php?post_type=angestellte'); ?>" class="rt-stat-link">
+                                    <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
+                                </a>
+                            <?php endif; ?>
                         </div>
                         
                         <div class="rt-stat-card">
@@ -170,9 +172,11 @@ class RT_Employee_Manager_Admin_Settings {
                 <div class="rt-quick-actions">
                     <h2><?php _e('Schnellaktionen', 'rt-employee-manager'); ?></h2>
                     <div class="rt-action-buttons">
-                        <a href="<?php echo admin_url('post-new.php?post_type=angestellte'); ?>" class="button button-primary">
-                            <?php _e('Neuen Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
-                        </a>
+                        <?php if (current_user_can('create_employees')): ?>
+                            <a href="<?php echo admin_url('post-new.php?post_type=angestellte'); ?>" class="button button-primary">
+                                <?php _e('Neuen Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
+                            </a>
+                        <?php endif; ?>
                         <?php if ($is_admin): ?>
                             <a href="<?php echo admin_url('post-new.php?post_type=kunde'); ?>" class="button button-secondary">
                                 <?php _e('Neuen Kunde hinzufügen', 'rt-employee-manager'); ?>
@@ -232,9 +236,18 @@ class RT_Employee_Manager_Admin_Settings {
                                                 <?php echo get_the_date('d.m.Y H:i', $employee->ID); ?>
                                             </td>
                                             <td>
-                                                <a href="<?php echo get_edit_post_link($employee->ID); ?>" class="button button-small">
-                                                    <?php _e('Bearbeiten', 'rt-employee-manager'); ?>
-                                                </a>
+                                                <?php 
+                                                $edit_link = get_edit_post_link($employee->ID);
+                                                if ($edit_link && current_user_can('edit_post', $employee->ID)): 
+                                                ?>
+                                                    <a href="<?php echo esc_url($edit_link); ?>" class="button button-small">
+                                                        <?php _e('Bearbeiten', 'rt-employee-manager'); ?>
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span class="button button-small button-disabled">
+                                                        <?php _e('Keine Berechtigung', 'rt-employee-manager'); ?>
+                                                    </span>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
