@@ -151,12 +151,12 @@ class RT_Employee_Manager_Admin_Settings {
                         </div>
                         
                         <div class="rt-stat-card">
-                            <h3><?php echo $this->get_active_employees_count(); ?></h3>
+                            <h3><?php echo intval($this->get_active_employees_count()); ?></h3>
                             <p><?php _e('Aktive Mitarbeiter', 'rt-employee-manager'); ?></p>
                         </div>
                         
                         <div class="rt-stat-card">
-                            <h3><?php echo $this->get_forms_submissions_today(); ?></h3>
+                            <h3><?php echo intval($this->get_forms_submissions_today()); ?></h3>
                             <p><?php _e('Anmeldungen heute', 'rt-employee-manager'); ?></p>
                         </div>
                     <?php else: ?>
@@ -341,7 +341,7 @@ class RT_Employee_Manager_Admin_Settings {
                                 <td>
                                     <?php if (class_exists('GFForms')): ?>
                                         <span class="rt-status-ok">✅ <?php _e('Aktiv', 'rt-employee-manager'); ?></span>
-                                        <small>(Version: <?php echo GFCommon::$version; ?>)</small>
+                                        <small>(Version: <?php echo esc_html(GFCommon::$version); ?>)</small>
                                     <?php else: ?>
                                         <span class="rt-status-error">❌ <?php _e('Nicht installiert', 'rt-employee-manager'); ?></span>
                                     <?php endif; ?>

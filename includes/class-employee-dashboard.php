@@ -38,20 +38,8 @@ class RT_Employee_Manager_Employee_Dashboard {
         $has_kunden_role = in_array('kunden', $user_roles);
         $has_admin_cap = current_user_can('manage_options');
         
-        // Debug output for testing
-        if (current_user_can('edit_posts')) {
-            $debug_info = sprintf(
-                'DEBUG - User: %s | Roles: %s | Has Kunden: %s | Has Admin: %s',
-                $current_user->user_email,
-                implode(', ', $user_roles),
-                $has_kunden_role ? 'Yes' : 'No',
-                $has_admin_cap ? 'Yes' : 'No'
-            );
-            $debug_output = '<div style="background: #ffeb3b; padding: 10px; margin: 10px 0; border: 1px solid #ccc;">' . $debug_info . '</div>';
-        }
-        
         if (!$has_kunden_role && !$has_admin_cap) {
-            return (isset($debug_output) ? $debug_output : '') . '<p>' . __('Sie haben keine Berechtigung, dieses Dashboard zu nutzen.', 'rt-employee-manager') . '</p>';
+            return '<p>' . __('Sie haben keine Berechtigung, dieses Dashboard zu nutzen.', 'rt-employee-manager') . '</p>';
         }
         
         ob_start();
@@ -121,19 +109,19 @@ class RT_Employee_Manager_Employee_Dashboard {
                 <!-- Statistics -->
                 <div class="rt-dashboard-stats">
                     <div class="rt-stat-card">
-                        <h3><?php echo $stats['total']; ?></h3>
+                        <h3><?php echo intval($stats['total']); ?></h3>
                         <p><?php _e('Gesamt', 'rt-employee-manager'); ?></p>
                     </div>
                     <div class="rt-stat-card active">
-                        <h3><?php echo $stats['active']; ?></h3>
+                        <h3><?php echo intval($stats['active']); ?></h3>
                         <p><?php _e('Aktiv', 'rt-employee-manager'); ?></p>
                     </div>
                     <div class="rt-stat-card inactive">
-                        <h3><?php echo $stats['inactive']; ?></h3>
+                        <h3><?php echo intval($stats['inactive']); ?></h3>
                         <p><?php _e('Inaktiv', 'rt-employee-manager'); ?></p>
                     </div>
                     <div class="rt-stat-card terminated">
-                        <h3><?php echo $stats['terminated']; ?></h3>
+                        <h3><?php echo intval($stats['terminated']); ?></h3>
                         <p><?php _e('Gekündigt', 'rt-employee-manager'); ?></p>
                     </div>
                 </div>
@@ -261,7 +249,7 @@ class RT_Employee_Manager_Employee_Dashboard {
             'terminated' => __('Gekündigt', 'rt-employee-manager')
         );
         ?>
-        <tr data-employee-id="<?php echo $employee_id; ?>" class="employee-row status-<?php echo esc_attr($status); ?>">
+        <tr data-employee-id="<?php echo esc_attr($employee_id); ?>" class="employee-row status-<?php echo esc_attr($status); ?>">
             <td class="employee-name">
                 <strong><?php echo esc_html($vorname . ' ' . $nachname); ?></strong>
             </td>
@@ -283,13 +271,13 @@ class RT_Employee_Manager_Employee_Dashboard {
                 <?php if ($atts['allow_edit'] === 'true'): ?>
                 <button type="button" 
                         class="rt-btn rt-btn-edit" 
-                        data-employee-id="<?php echo $employee_id; ?>"
+                        data-employee-id="<?php echo esc_attr($employee_id); ?>"
                         title="<?php _e('Bearbeiten', 'rt-employee-manager'); ?>">
                     📝
                 </button>
                 <?php endif; ?>
                 
-                <select class="rt-status-select" data-employee-id="<?php echo $employee_id; ?>">
+                <select class="rt-status-select" data-employee-id="<?php echo esc_attr($employee_id); ?>">
                     <?php foreach ($status_labels as $value => $label): ?>
                     <option value="<?php echo esc_attr($value); ?>" <?php selected($status, $value); ?>>
                         <?php echo esc_html($label); ?>
@@ -300,7 +288,7 @@ class RT_Employee_Manager_Employee_Dashboard {
                 <?php if ($atts['allow_delete'] === 'true'): ?>
                 <button type="button" 
                         class="rt-btn rt-btn-delete" 
-                        data-employee-id="<?php echo $employee_id; ?>"
+                        data-employee-id="<?php echo esc_attr($employee_id); ?>"
                         data-employee-name="<?php echo esc_attr($vorname . ' ' . $nachname); ?>"
                         title="<?php _e('Löschen', 'rt-employee-manager'); ?>">
                     🗑️
@@ -441,8 +429,10 @@ class RT_Employee_Manager_Employee_Dashboard {
      * Enqueue frontend scripts
      */
     public function enqueue_frontend_scripts() {
-        if (is_user_logged_in() && (has_shortcode(get_post()->post_content, 'employee_dashboard') || 
-            has_shortcode(get_post()->post_content, 'employee_form'))) {
+        $current_post = get_post();
+        if (is_user_logged_in() && $current_post && 
+            (has_shortcode($current_post->post_content, 'employee_dashboard') || 
+            has_shortcode($current_post->post_content, 'employee_form'))) {
             
             wp_enqueue_script(
                 'rt-employee-dashboard',

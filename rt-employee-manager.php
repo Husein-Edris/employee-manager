@@ -36,34 +36,6 @@ class RT_Employee_Manager {
         return self::$instance;
     }
     
-    
-    /**
-     * Log emails locally instead of sending them
-     */
-    public function log_emails_locally($args) {
-        $log_entry = array(
-            'timestamp' => current_time('Y-m-d H:i:s'),
-            'to' => is_array($args['to']) ? implode(', ', $args['to']) : $args['to'],
-            'subject' => $args['subject'],
-            'message' => $args['message'],
-            'headers' => is_array($args['headers']) ? implode(', ', $args['headers']) : $args['headers']
-        );
-        
-        $log_file = WP_CONTENT_DIR . '/rt-email-log.txt';
-        $log_content = "=== EMAIL LOG ===\n";
-        $log_content .= "Time: " . $log_entry['timestamp'] . "\n";
-        $log_content .= "To: " . $log_entry['to'] . "\n";
-        $log_content .= "Subject: " . $log_entry['subject'] . "\n";
-        $log_content .= "Headers: " . $log_entry['headers'] . "\n";
-        $log_content .= "Message:\n" . $log_entry['message'] . "\n";
-        $log_content .= "=================\n\n";
-        
-        file_put_contents($log_file, $log_content, FILE_APPEND | LOCK_EX);
-        
-        // Return false to prevent actual sending in local environment
-        return false;
-    }
-    
     private function __construct() {
         $this->init_hooks();
     }
@@ -76,14 +48,18 @@ class RT_Employee_Manager {
         // Add admin notice if plugin was recently deactivated
         add_action('admin_notices', array($this, 'deactivation_notice'));
         
-        // Disable Gravity Forms rate limiting for development
-        add_filter('gform_entry_limit_exceeded_message', '__return_false');
-        add_filter('gform_form_limit_exceeded', '__return_false');
-        add_filter('gform_enable_duplicate_prevention', '__return_false');
-        add_filter('gform_duplicate_message', '__return_false');
+        // Production safety checks
+        add_action('admin_notices', array($this, 'production_safety_notices'));
         
-        // Add email logging for local development
+        // Development environment features
         if (defined('WP_ENVIRONMENT_TYPE') && WP_ENVIRONMENT_TYPE === 'local') {
+            // Disable Gravity Forms rate limiting for development only
+            add_filter('gform_entry_limit_exceeded_message', '__return_false');
+            add_filter('gform_form_limit_exceeded', '__return_false');
+            add_filter('gform_enable_duplicate_prevention', '__return_false');
+            add_filter('gform_duplicate_message', '__return_false');
+            
+            // Add email logging for local development
             add_filter('wp_mail', array($this, 'log_emails_locally'));
         }
     }
@@ -288,6 +264,65 @@ class RT_Employee_Manager {
         }
     }
     
+    /**
+     * Production safety notices - warn about potential issues
+     */
+    public function production_safety_notices() {
+        // Only show to administrators
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        
+        $warnings = array();
+        
+        // Check if WP_DEBUG is enabled in production
+        if (defined('WP_DEBUG') && WP_DEBUG && (!defined('WP_ENVIRONMENT_TYPE') || WP_ENVIRONMENT_TYPE !== 'local')) {
+            $warnings[] = __('WP_DEBUG is enabled on a production site. Consider disabling it for security.', 'rt-employee-manager');
+        }
+        
+        // Check if error logging is exposed
+        if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG && ini_get('log_errors')) {
+            $log_file = WP_CONTENT_DIR . '/debug.log';
+            if (file_exists($log_file) && is_readable($log_file) && filesize($log_file) > 1024 * 1024) { // > 1MB
+                $warnings[] = __('Debug log file is large (>1MB). Consider clearing it or disabling debug logging.', 'rt-employee-manager');
+            }
+        }
+        
+        // Check if admin email is set properly
+        $admin_email = get_option('admin_email');
+        if (empty($admin_email) || $admin_email === 'admin@example.com' || strpos($admin_email, 'changeme') !== false) {
+            $warnings[] = __('Admin email is not properly configured. Registration notifications may not work.', 'rt-employee-manager');
+        }
+        
+        // Check if required plugins are active
+        if (!class_exists('GFForms')) {
+            $warnings[] = __('Gravity Forms is not active. Employee registration will not work.', 'rt-employee-manager');
+        }
+        
+        if (!class_exists('GF_Advanced_Post_Creation')) {
+            $warnings[] = __('Gravity Forms Advanced Post Creation is not active. Some features may not work.', 'rt-employee-manager');
+        }
+        
+        // Check file permissions
+        $upload_dir = wp_upload_dir();
+        if (!wp_is_writable($upload_dir['basedir'])) {
+            $warnings[] = __('Uploads directory is not writable. Email logging and file uploads may fail.', 'rt-employee-manager');
+        }
+        
+        // Display warnings if any
+        if (!empty($warnings)) {
+            echo '<div class="notice notice-warning">';
+            echo '<p><strong>' . __('RT Employee Manager - Production Warnings:', 'rt-employee-manager') . '</strong></p>';
+            echo '<ul>';
+            foreach ($warnings as $warning) {
+                echo '<li>' . esc_html($warning) . '</li>';
+            }
+            echo '</ul>';
+            echo '<p><em>' . __('These are recommendations for optimal security and functionality.', 'rt-employee-manager') . '</em></p>';
+            echo '</div>';
+        }
+    }
+    
     private function create_tables() {
         global $wpdb;
         
@@ -336,12 +371,14 @@ class RT_Employee_Manager {
             ip_address varchar(45),
             user_agent text,
             gravity_form_entry_id int(11),
+            created_user_id int(11),
             PRIMARY KEY (id),
             KEY status (status),
             KEY company_email (company_email),
             KEY contact_email (contact_email),
             KEY submitted_at (submitted_at),
-            KEY gravity_form_entry_id (gravity_form_entry_id)
+            KEY gravity_form_entry_id (gravity_form_entry_id),
+            KEY created_user_id (created_user_id)
         ) $charset_collate;";
         
         dbDelta($sql);
@@ -363,6 +400,39 @@ class RT_Employee_Manager {
                 update_option('rt_employee_manager_' . $key, $value);
             }
         }
+    }
+    
+    /**
+     * Log emails locally instead of sending them (development only)
+     */
+    public function log_emails_locally($args) {
+        $log_entry = array(
+            'timestamp' => current_time('Y-m-d H:i:s'),
+            'to' => is_array($args['to']) ? implode(', ', $args['to']) : $args['to'],
+            'subject' => $args['subject'],
+            'message' => $args['message'],
+            'headers' => is_array($args['headers']) ? implode(', ', $args['headers']) : $args['headers']
+        );
+        
+        // Use uploads directory for better security
+        $upload_dir = wp_upload_dir();
+        $log_file = $upload_dir['basedir'] . '/rt-email-log.txt';
+        
+        $log_content = "=== EMAIL LOG ===\n";
+        $log_content .= "Time: " . $log_entry['timestamp'] . "\n";
+        $log_content .= "To: " . $log_entry['to'] . "\n";
+        $log_content .= "Subject: " . $log_entry['subject'] . "\n";
+        $log_content .= "Headers: " . $log_entry['headers'] . "\n";
+        $log_content .= "Message:\n" . $log_entry['message'] . "\n";
+        $log_content .= "=================\n\n";
+        
+        // Secure file writing with error handling
+        if (wp_is_writable($upload_dir['basedir'])) {
+            file_put_contents($log_file, $log_content, FILE_APPEND | LOCK_EX);
+        }
+        
+        // Return false to prevent actual sending in local environment
+        return false;
     }
 }
 
