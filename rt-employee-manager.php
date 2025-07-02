@@ -45,6 +45,11 @@ class RT_Employee_Manager {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
         
+        // Fix for Admin Site Enhancements plugin menu array corruption
+        add_action('admin_menu', array($this, 'fix_menu_arrays'), 1);
+        add_action('admin_init', array($this, 'fix_menu_arrays'), 1);
+        add_action('current_screen', array($this, 'fix_menu_arrays'), 1);
+        
         // Add admin notice if plugin was recently deactivated
         add_action('admin_notices', array($this, 'deactivation_notice'));
         
@@ -433,6 +438,93 @@ class RT_Employee_Manager {
         
         // Return false to prevent actual sending in local environment
         return false;
+    }
+    
+    /**
+     * Fix WordPress menu arrays that get corrupted by Admin Site Enhancements plugin
+     * This ensures $menu and $submenu globals exist and are properly structured
+     */
+    public function fix_menu_arrays() {
+        global $menu, $submenu, $_wp_submenu_nopriv;
+        
+        // Only run in admin area
+        if (!is_admin()) {
+            return;
+        }
+        
+        // Initialize menu arrays if they don't exist or are corrupted
+        if (!is_array($menu)) {
+            $menu = array();
+        }
+        
+        if (!is_array($submenu)) {
+            $submenu = array();
+        }
+        
+        if (!is_array($_wp_submenu_nopriv)) {
+            $_wp_submenu_nopriv = array();
+        }
+        
+        // Validate existing menu items and fix array key issues
+        foreach ($menu as $key => $menu_item) {
+            if (!is_array($menu_item)) {
+                unset($menu[$key]);
+                continue;
+            }
+            
+            // Ensure menu item has all required keys (0, 1, 2, 3, 4, 5, 6)
+            $required_keys = array(0, 1, 2, 3, 4, 5, 6);
+            foreach ($required_keys as $required_key) {
+                if (!array_key_exists($required_key, $menu_item)) {
+                    $menu[$key][$required_key] = '';
+                }
+            }
+            
+            // Specifically fix key 2 (callback/file) which is causing the errors
+            if (empty($menu[$key][2])) {
+                $menu[$key][2] = 'admin.php'; // Safe default
+            }
+        }
+        
+        // Validate submenu items
+        foreach ($submenu as $parent => $sub_items) {
+            if (!is_array($sub_items)) {
+                unset($submenu[$parent]);
+                continue;
+            }
+            
+            foreach ($sub_items as $sub_key => $sub_item) {
+                if (!is_array($sub_item)) {
+                    unset($submenu[$parent][$sub_key]);
+                    continue;
+                }
+                
+                // Ensure submenu item has required keys (0, 1, 2)
+                $required_sub_keys = array(0, 1, 2);
+                foreach ($required_sub_keys as $required_key) {
+                    if (!array_key_exists($required_key, $sub_item)) {
+                        $submenu[$parent][$sub_key][$required_key] = '';
+                    }
+                }
+                
+                // Fix key 2 for submenus
+                if (empty($submenu[$parent][$sub_key][2])) {
+                    $submenu[$parent][$sub_key][2] = 'admin.php';
+                }
+            }
+        }
+        
+        // For kunden users, ensure minimal menu structure exists
+        if (current_user_can('read') && !current_user_can('manage_options')) {
+            $current_user = wp_get_current_user();
+            $is_kunden = in_array('kunden', $current_user->roles);
+            
+            if ($is_kunden && count($menu) < 3) {
+                // Add essential WordPress menu items that kunden users need
+                $menu[2] = array('Dashboard', 'read', 'index.php', '', 'menu-top menu-top-first menu-icon-dashboard', 'menu-dashboard', 'dashicons-dashboard');
+                $menu[4] = array('', 'read', 'separator1', '', 'wp-menu-separator', '', '');
+            }
+        }
     }
 }
 

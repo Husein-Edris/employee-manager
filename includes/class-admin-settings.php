@@ -73,6 +73,7 @@ class RT_Employee_Manager_Admin_Settings {
             wp_die(__('You do not have sufficient permissions to access this page.'));
         }
         
+        
         // Debug: Fix missing metadata for test employee post
         $this->fix_test_employee_metadata();
         
@@ -937,4 +938,5 @@ class RT_Employee_Manager_Admin_Settings {
             "SELECT * FROM {$table_name} WHERE status = 'pending' ORDER BY submitted_at DESC LIMIT 10"
         );
     }
+    
 }

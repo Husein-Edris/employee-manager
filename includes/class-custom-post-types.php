@@ -111,7 +111,7 @@ class RT_Employee_Manager_Custom_Post_Types {
         
         register_post_type('angestellte', $args);
         
-        // Register Kunde (Client) post type
+        // Register Kunde (Client) post type - only visible to admins
         $kunde_args = array(
             'label' => __('Kunden', 'rt-employee-manager'),
             'labels' => array(
@@ -131,8 +131,8 @@ class RT_Employee_Manager_Custom_Post_Types {
             ),
             'public' => false,
             'publicly_queryable' => false,
-            'show_ui' => true,
-            'show_in_menu' => true,
+            'show_ui' => current_user_can('manage_options'),
+            'show_in_menu' => current_user_can('manage_options'),
             'query_var' => true,
             'rewrite' => array('slug' => 'kunden'),
             'capability_type' => 'post',
