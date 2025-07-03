@@ -432,6 +432,9 @@ class RT_Employee_Manager_ACF_Integration
 
         // Log the save
         $this->log_employee_update($post_id);
+        
+        // Clear statistics cache when employee is saved
+        $this->clear_statistics_cache($post_id);
     }
 
     /**
@@ -590,6 +593,22 @@ class RT_Employee_Manager_ACF_Integration
         }
         
         return $field;
+    }
+    
+    /**
+     * Clear statistics cache when employee data changes
+     */
+    private function clear_statistics_cache($post_id)
+    {
+        $employer_id = get_post_meta($post_id, 'employer_id', true);
+        
+        // Clear admin stats cache
+        delete_transient('rt_admin_stats');
+        
+        // Clear user-specific stats cache
+        if ($employer_id) {
+            delete_transient('rt_user_stats_' . $employer_id);
+        }
     }
 
 }

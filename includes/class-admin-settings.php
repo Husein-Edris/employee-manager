@@ -87,25 +87,49 @@ class RT_Employee_Manager_Admin_Settings {
         $is_kunden = in_array('kunden', $current_user->roles);
         
         if ($is_admin) {
-            // Admin sees all data
-            $total_employees = wp_count_posts('angestellte')->publish;
-            $total_clients = wp_count_posts('kunde')->publish;
+            // Admin sees all data - cached for 5 minutes
+            $cache_key = 'rt_admin_stats';
+            $stats = get_transient($cache_key);
+            
+            if (false === $stats) {
+                $stats = array(
+                    'total_employees' => wp_count_posts('angestellte')->publish,
+                    'total_clients' => wp_count_posts('kunde')->publish
+                );
+                set_transient($cache_key, $stats, 300); // Cache for 5 minutes
+            }
+            
+            $total_employees = $stats['total_employees'];
+            $total_clients = $stats['total_clients'];
         } else {
-            // Kunden users see only their own employees
-            $args = array(
-                'post_type' => 'angestellte',
-                'post_status' => 'publish',
-                'posts_per_page' => -1,
-                'meta_query' => array(
-                    array(
-                        'key' => 'employer_id',
-                        'value' => $current_user->ID,
-                        'compare' => '='
+            // Kunden users see only their own employees - cached for 5 minutes
+            $cache_key = 'rt_user_stats_' . $current_user->ID;
+            $user_stats = get_transient($cache_key);
+            
+            if (false === $user_stats) {
+                $args = array(
+                    'post_type' => 'angestellte',
+                    'post_status' => 'publish',
+                    'posts_per_page' => 100, // Limit to prevent memory issues
+                    'no_found_rows' => true, // Improve performance
+                    'meta_query' => array(
+                        array(
+                            'key' => 'employer_id',
+                            'value' => $current_user->ID,
+                            'compare' => '='
+                        )
                     )
-                )
-            );
-            $user_employees = get_posts($args);
-            $total_employees = count($user_employees);
+                );
+                
+                $user_employees = get_posts($args);
+                $user_stats = array(
+                    'total_employees' => count($user_employees),
+                    'employees' => $user_employees
+                );
+                set_transient($cache_key, $user_stats, 300); // Cache for 5 minutes
+            }
+            
+            $total_employees = $user_stats['total_employees'];
             $total_clients = 1; // The current user's company
         }
         

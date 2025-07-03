@@ -386,19 +386,40 @@ class RT_Employee_Manager_Custom_Post_Types {
     }
     
     /**
-     * Refresh user capabilities - force update
+     * Refresh user capabilities - force update (optimized for performance)
      */
     private static function refresh_user_capabilities() {
+        // Only refresh capabilities if not done recently
+        $last_refresh = get_option('rt_capabilities_last_refresh', 0);
+        if ((time() - $last_refresh) < 3600) { // Only refresh once per hour
+            return;
+        }
+        
         // Clear capabilities cache to force refresh
         wp_cache_delete('user_meta', 'users');
         
-        // Get all kunden users and refresh their capabilities
-        $kunden_users = get_users(array('role' => 'kunden'));
-        foreach ($kunden_users as $user) {
-            // Force capability refresh by removing and re-adding the role
-            $user->remove_role('kunden');
-            $user->add_role('kunden');
-        }
+        // Get all kunden users in batches to prevent memory issues
+        $batch_size = 50;
+        $page = 1;
+        
+        do {
+            $kunden_users = get_users(array(
+                'role' => 'kunden',
+                'number' => $batch_size,
+                'paged' => $page
+            ));
+            
+            foreach ($kunden_users as $user) {
+                // Force capability refresh by removing and re-adding the role
+                $user->remove_role('kunden');
+                $user->add_role('kunden');
+            }
+            
+            $page++;
+        } while (count($kunden_users) === $batch_size);
+        
+        // Update the last refresh timestamp
+        update_option('rt_capabilities_last_refresh', time());
     }
     
     /**

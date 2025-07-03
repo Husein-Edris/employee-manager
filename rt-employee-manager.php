@@ -143,7 +143,7 @@ class RT_Employee_Manager {
             echo '<div class="notice notice-error"><p>';
             echo sprintf(
                 __('RT Employee Manager requires the following plugins: %s', 'rt-employee-manager'),
-                implode(', ', $missing)
+                esc_html(implode(', ', $missing))
             );
             echo '</p></div>';
         }
@@ -192,6 +192,9 @@ class RT_Employee_Manager {
         
         // Create database tables if needed
         $this->create_tables();
+        
+        // Add database indexes for performance
+        $this->add_performance_indexes();
         
         // Set default options
         $this->set_default_options();
@@ -391,6 +394,30 @@ class RT_Employee_Manager {
         ) $charset_collate;";
         
         dbDelta($sql);
+    }
+    
+    /**
+     * Add database indexes for better performance
+     */
+    private function add_performance_indexes() {
+        global $wpdb;
+        
+        // Only add indexes once
+        if (get_option('rt_employee_manager_indexes_added')) {
+            return;
+        }
+        
+        // Add index for employer_id lookups
+        $wpdb->query("CREATE INDEX IF NOT EXISTS idx_rt_employer_id ON {$wpdb->postmeta} (meta_key, meta_value) WHERE meta_key = 'employer_id'");
+        
+        // Add index for status lookups
+        $wpdb->query("CREATE INDEX IF NOT EXISTS idx_rt_status ON {$wpdb->postmeta} (meta_key, meta_value) WHERE meta_key = 'status'");
+        
+        // Add composite index for employee queries
+        $wpdb->query("CREATE INDEX IF NOT EXISTS idx_rt_employee_lookup ON {$wpdb->postmeta} (post_id, meta_key, meta_value)");
+        
+        // Mark indexes as added
+        update_option('rt_employee_manager_indexes_added', true);
     }
     
     private function set_default_options() {
