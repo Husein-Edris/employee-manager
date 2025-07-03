@@ -49,6 +49,10 @@ class RT_Employee_Manager {
         add_action('admin_menu', array($this, 'fix_menu_arrays'), 1);
         add_action('admin_init', array($this, 'fix_menu_arrays'), 1);
         add_action('current_screen', array($this, 'fix_menu_arrays'), 1);
+        add_action('wp_before_admin_bar_render', array($this, 'fix_menu_arrays'), 1);
+        
+        // Clean up admin menu for kunden users
+        add_action('admin_menu', array($this, 'customize_admin_menu_for_kunden'), 999);
         
         // Add admin notice if plugin was recently deactivated
         add_action('admin_notices', array($this, 'deactivation_notice'));
@@ -169,7 +173,7 @@ class RT_Employee_Manager {
         }
         
         new RT_Employee_Manager_Employee_Dashboard();
-        new RT_Employee_Manager_Admin_Settings();
+        $GLOBALS['rt_employee_manager_admin_settings'] = new RT_Employee_Manager_Admin_Settings();
         new RT_Employee_Manager_Security();
         new RT_Employee_Manager_Public_Registration();
         new RT_Employee_Manager_Registration_Admin();
@@ -445,14 +449,14 @@ class RT_Employee_Manager {
      * This ensures $menu and $submenu globals exist and are properly structured
      */
     public function fix_menu_arrays() {
-        global $menu, $submenu, $_wp_submenu_nopriv;
+        global $menu, $submenu, $_wp_submenu_nopriv, $_wp_menu_nopriv;
         
         // Only run in admin area
         if (!is_admin()) {
             return;
         }
         
-        // Initialize menu arrays if they don't exist or are corrupted
+        // Force re-initialize menu arrays to prevent corruption
         if (!is_array($menu)) {
             $menu = array();
         }
@@ -465,66 +469,211 @@ class RT_Employee_Manager {
             $_wp_submenu_nopriv = array();
         }
         
-        // Validate existing menu items and fix array key issues
-        foreach ($menu as $key => $menu_item) {
-            if (!is_array($menu_item)) {
-                unset($menu[$key]);
-                continue;
-            }
-            
-            // Ensure menu item has all required keys (0, 1, 2, 3, 4, 5, 6)
-            $required_keys = array(0, 1, 2, 3, 4, 5, 6);
-            foreach ($required_keys as $required_key) {
-                if (!array_key_exists($required_key, $menu_item)) {
-                    $menu[$key][$required_key] = '';
-                }
-            }
-            
-            // Specifically fix key 2 (callback/file) which is causing the errors
-            if (empty($menu[$key][2])) {
-                $menu[$key][2] = 'admin.php'; // Safe default
-            }
+        if (!is_array($_wp_menu_nopriv)) {
+            $_wp_menu_nopriv = array();
         }
         
-        // Validate submenu items
+        // More aggressive fix - rebuild corrupted menu items
+        $fixed_menu = array();
+        foreach ($menu as $key => $menu_item) {
+            if (!is_array($menu_item)) {
+                continue; // Skip corrupted items
+            }
+            
+            // Ensure menu item has all required keys with proper defaults
+            $fixed_item = array(
+                0 => isset($menu_item[0]) ? $menu_item[0] : '', // Menu title
+                1 => isset($menu_item[1]) ? $menu_item[1] : 'read', // Capability
+                2 => isset($menu_item[2]) && !empty($menu_item[2]) ? $menu_item[2] : 'admin.php', // Menu slug/file
+                3 => isset($menu_item[3]) ? $menu_item[3] : '', // Page title
+                4 => isset($menu_item[4]) ? $menu_item[4] : 'menu-top', // CSS classes
+                5 => isset($menu_item[5]) ? $menu_item[5] : '', // Hookname
+                6 => isset($menu_item[6]) ? $menu_item[6] : '' // Icon URL
+            );
+            
+            $fixed_menu[$key] = $fixed_item;
+        }
+        $menu = $fixed_menu;
+        
+        // Fix submenu items
+        $fixed_submenu = array();
         foreach ($submenu as $parent => $sub_items) {
             if (!is_array($sub_items)) {
-                unset($submenu[$parent]);
                 continue;
             }
             
+            $fixed_sub_items = array();
             foreach ($sub_items as $sub_key => $sub_item) {
                 if (!is_array($sub_item)) {
-                    unset($submenu[$parent][$sub_key]);
                     continue;
                 }
                 
-                // Ensure submenu item has required keys (0, 1, 2)
-                $required_sub_keys = array(0, 1, 2);
-                foreach ($required_sub_keys as $required_key) {
-                    if (!array_key_exists($required_key, $sub_item)) {
-                        $submenu[$parent][$sub_key][$required_key] = '';
-                    }
-                }
+                // Ensure submenu item has required keys
+                $fixed_sub_item = array(
+                    0 => isset($sub_item[0]) ? $sub_item[0] : '', // Menu title
+                    1 => isset($sub_item[1]) ? $sub_item[1] : 'read', // Capability
+                    2 => isset($sub_item[2]) && !empty($sub_item[2]) ? $sub_item[2] : 'admin.php' // Menu slug/file
+                );
                 
-                // Fix key 2 for submenus
-                if (empty($submenu[$parent][$sub_key][2])) {
-                    $submenu[$parent][$sub_key][2] = 'admin.php';
-                }
+                $fixed_sub_items[$sub_key] = $fixed_sub_item;
+            }
+            
+            if (!empty($fixed_sub_items)) {
+                $fixed_submenu[$parent] = $fixed_sub_items;
+            }
+        }
+        $submenu = $fixed_submenu;
+    }
+    
+    /**
+     * Customize admin menu specifically for kunden users
+     */
+    public function customize_admin_menu_for_kunden() {
+        global $menu, $submenu;
+        
+        $current_user = wp_get_current_user();
+        
+        // Only apply to kunden users (not admins)
+        if (!in_array('kunden', $current_user->roles) || current_user_can('manage_options')) {
+            return;
+        }
+        
+        // Remove all menu items that kunden users shouldn't see
+        $items_to_remove = array(
+            'index.php', // Dashboard
+            'edit.php', // Posts
+            'upload.php', // Media
+            'edit.php?post_type=page', // Pages
+            'edit-comments.php', // Comments
+            'themes.php', // Appearance
+            'plugins.php', // Plugins
+            'users.php', // Users
+            'tools.php', // Tools
+            'options-general.php', // Settings
+            'rank-math', // RankMath SEO
+            'seo-by-rank-math', // Alternative RankMath
+            'profile.php' // Profile - we'll add this back later in a controlled way
+        );
+        
+        // Remove unwanted menu items
+        foreach ($items_to_remove as $menu_slug) {
+            remove_menu_page($menu_slug);
+        }
+        
+        // Remove all submenus from remaining items, but keep employee-related ones
+        foreach ($submenu as $parent_slug => $sub_items) {
+            if ($parent_slug !== 'rt-employee-manager' && $parent_slug !== 'edit.php?post_type=angestellte') {
+                unset($submenu[$parent_slug]);
             }
         }
         
-        // For kunden users, ensure minimal menu structure exists
-        if (current_user_can('read') && !current_user_can('manage_options')) {
-            $current_user = wp_get_current_user();
-            $is_kunden = in_array('kunden', $current_user->roles);
-            
-            if ($is_kunden && count($menu) < 3) {
-                // Add essential WordPress menu items that kunden users need
-                $menu[2] = array('Dashboard', 'read', 'index.php', '', 'menu-top menu-top-first menu-icon-dashboard', 'menu-dashboard', 'dashicons-dashboard');
-                $menu[4] = array('', 'read', 'separator1', '', 'wp-menu-separator', '', '');
-            }
+        // Add back only essential items for kunden users
+        add_menu_page(
+            __('Profil', 'rt-employee-manager'),
+            __('Profil', 'rt-employee-manager'),
+            'read',
+            'profile.php',
+            '',
+            'dashicons-admin-users',
+            80
+        );
+        
+        // Get the admin settings instance for the callback
+        $admin_settings = $GLOBALS['rt_employee_manager_admin_settings'] ?? null;
+        
+        if (!$admin_settings) {
+            // Create temporary instance if not available
+            $admin_settings = new RT_Employee_Manager_Admin_Settings();
+            $GLOBALS['rt_employee_manager_admin_settings'] = $admin_settings;
         }
+        
+        // Ensure our Employee Manager menu is properly positioned
+        add_menu_page(
+            __('Employee Manager', 'rt-employee-manager'),
+            __('Employee Manager', 'rt-employee-manager'),
+            'read',
+            'rt-employee-manager',
+            array($admin_settings, 'admin_page'),
+            'dashicons-groups',
+            26
+        );
+        
+        // Add Angestellte menu item for kunden users
+        add_menu_page(
+            __('Angestellte', 'rt-employee-manager'),
+            __('Angestellte', 'rt-employee-manager'),
+            'read',
+            'edit.php?post_type=angestellte',
+            '',
+            'dashicons-admin-users',
+            27
+        );
+        
+        // Force menu rebuild
+        $this->rebuild_kunden_menu();
+    }
+    
+    /**
+     * Rebuild menu structure for kunden users
+     */
+    private function rebuild_kunden_menu() {
+        global $menu;
+        
+        $current_user = wp_get_current_user();
+        
+        if (!in_array('kunden', $current_user->roles) || current_user_can('manage_options')) {
+            return;
+        }
+        
+        // Create clean menu structure
+        $clean_menu = array();
+        
+        // Add Employee Manager as primary menu item
+        $clean_menu[26] = array(
+            'Employee Manager',
+            'read',
+            'rt-employee-manager',
+            'Employee Manager',
+            'menu-top menu-icon-rt-employee',
+            'menu-rt-employee-manager',
+            'dashicons-groups'
+        );
+        
+        // Add Angestellte submenu
+        $clean_menu[27] = array(
+            'Angestellte',
+            'read',
+            'edit.php?post_type=angestellte',
+            'Angestellte',
+            'menu-top',
+            'menu-angestellte',
+            'dashicons-admin-users'
+        );
+        
+        // Add separator
+        $clean_menu[79] = array(
+            '',
+            'read',
+            'separator-custom',
+            '',
+            'wp-menu-separator',
+            '',
+            ''
+        );
+        
+        // Add Profile menu
+        $clean_menu[80] = array(
+            'Profil',
+            'read',
+            'profile.php',
+            'Profil',
+            'menu-top',
+            'menu-profile',
+            'dashicons-admin-users'
+        );
+        
+        // Replace the global menu
+        $menu = $clean_menu;
     }
 }
 

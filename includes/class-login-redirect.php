@@ -23,9 +23,9 @@ class RT_Employee_Manager_Login_Redirect {
         // Check if login was successful and user object exists
         if (isset($user->roles) && is_array($user->roles)) {
             
-            // If user is kunden, redirect to employee dashboard
+            // If user is kunden, redirect to employee manager main page
             if (in_array('kunden', $user->roles)) {
-                $dashboard_url = admin_url('admin.php?page=rt-employee-manager-dashboard');
+                $dashboard_url = admin_url('admin.php?page=rt-employee-manager');
                 
                 // Add welcome parameter for first-time users
                 if (get_user_meta($user->ID, 'first_login', true) !== 'completed') {
@@ -133,6 +133,7 @@ class RT_Employee_Manager_Login_Redirect {
             
             // Allow access to specific employee manager pages
             $allowed_pages = array(
+                'rt-employee-manager',
                 'rt-employee-manager-dashboard',
                 'edit.php',
                 'post-new.php',
@@ -163,7 +164,7 @@ class RT_Employee_Manager_Login_Redirect {
                 
                 // Only allow access to angestellte post type
                 if ($post_type !== 'angestellte') {
-                    wp_redirect(admin_url('admin.php?page=rt-employee-manager-dashboard&error=restricted'));
+                    wp_redirect(admin_url('admin.php?page=rt-employee-manager&error=restricted'));
                     exit;
                 }
             }
@@ -174,7 +175,7 @@ class RT_Employee_Manager_Login_Redirect {
             
             if (!$is_allowed) {
                 // Redirect to dashboard with error message
-                wp_redirect(admin_url('admin.php?page=rt-employee-manager-dashboard&error=access_denied'));
+                wp_redirect(admin_url('admin.php?page=rt-employee-manager&error=access_denied'));
                 exit;
             }
         }
@@ -185,9 +186,9 @@ class RT_Employee_Manager_Login_Redirect {
      */
     public static function get_dashboard_url() {
         if (current_user_can('manage_options')) {
-            return admin_url('admin.php?page=rt-employee-manager-dashboard');
+            return admin_url('admin.php?page=rt-employee-manager');
         } elseif (current_user_can('kunden')) {
-            return admin_url('admin.php?page=rt-employee-manager-dashboard');
+            return admin_url('admin.php?page=rt-employee-manager');
         }
         
         return home_url();

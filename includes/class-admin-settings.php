@@ -16,16 +16,21 @@ class RT_Employee_Manager_Admin_Settings {
      * Add admin menu
      */
     public function add_admin_menu() {
-        // Main menu page - accessible to both admins and kunden
-        $main_page = add_menu_page(
-            __('RT Employee Manager', 'rt-employee-manager'),
-            __('Employee Manager', 'rt-employee-manager'),
-            'read',  // Allow kunden access
-            'rt-employee-manager',
-            array($this, 'admin_page'),
-            'dashicons-groups',
-            26
-        );
+        // Only add menu if not already added by the main plugin for kunden users
+        $current_user = wp_get_current_user();
+        
+        if (!in_array('kunden', $current_user->roles)) {
+            // Main menu page - accessible to both admins and kunden
+            $main_page = add_menu_page(
+                __('RT Employee Manager', 'rt-employee-manager'),
+                __('Employee Manager', 'rt-employee-manager'),
+                'read',  // Allow kunden access
+                'rt-employee-manager',
+                array($this, 'admin_page'),
+                'dashicons-groups',
+                26
+            );
+        }
         
         // Settings submenu - admin only
         if (current_user_can('manage_options')) {

@@ -13,6 +13,13 @@ class RT_Employee_Manager_ACF_Integration
         add_action('acf/save_post', array($this, 'save_post_handler'), 20);
         add_filter('acf/load_value/name=employer_id', array($this, 'load_employer_id'), 10, 3);
         add_filter('acf/update_value/name=employer_id', array($this, 'update_employer_id'), 10, 3);
+        add_filter('acf/prepare_field/name=employer_id', array($this, 'prepare_employer_id_field'), 10, 1);
+        add_filter('acf/format_value/name=employer_id', array($this, 'format_employer_id_display'), 10, 3);
+        
+        // Clean up placeholder data on load
+        add_action('acf/load_field/name=vorname', array($this, 'clean_placeholder_data'));
+        add_action('acf/load_field/name=nachname', array($this, 'clean_placeholder_data'));
+        add_action('acf/load_field/name=sozialversicherungsnummer', array($this, 'clean_placeholder_data'));
     }
 
     /**
@@ -64,9 +71,9 @@ class RT_Employee_Manager_ACF_Integration
                     'name' => 'sozialversicherungsnummer',
                     'type' => 'text',
                     'required' => 1,
-                    'instructions' => __('Format: XX XXXX XX XX', 'rt-employee-manager'),
+                    'instructions' => __('Sozialversicherungsnummer ohne Leerzeichen eingeben', 'rt-employee-manager'),
                     'wrapper' => array('width' => '50'),
-                    'maxlength' => 13, // Including spaces
+                    'maxlength' => 10
                 ),
                 array(
                     'key' => 'field_geburtsdatum',
@@ -82,7 +89,6 @@ class RT_Employee_Manager_ACF_Integration
                     'label' => __('Staatsangehörigkeit', 'rt-employee-manager'),
                     'name' => 'staatsangehoerigkeit',
                     'type' => 'text',
-                    'default_value' => 'Österreich',
                     'wrapper' => array('width' => '50'),
                 ),
                 array(
@@ -236,7 +242,6 @@ class RT_Employee_Manager_ACF_Integration
                         'suspended' => __('Gesperrt', 'rt-employee-manager'),
                         'terminated' => __('Gekündigt', 'rt-employee-manager')
                     ),
-                    'default_value' => 'active',
                     'wrapper' => array('width' => '50'),
                 ),
                 array(
@@ -331,7 +336,6 @@ class RT_Employee_Manager_ACF_Integration
                             'label' => __('Land', 'rt-employee-manager'),
                             'name' => 'country',
                             'type' => 'text',
-                            'default_value' => 'Austria',
                             'wrapper' => array('width' => '100'),
                         ),
                     ),
@@ -524,4 +528,68 @@ class RT_Employee_Manager_ACF_Integration
 
         return $stats;
     }
+
+    /**
+     * Prepare employer_id field - make it read-only for kunden users
+     */
+    public function prepare_employer_id_field($field)
+    {
+        $current_user = wp_get_current_user();
+        
+        if (in_array('kunden', $current_user->roles) && !current_user_can('manage_options')) {
+            $field['readonly'] = 1;
+            $field['disabled'] = 1;
+            $field['instructions'] = __('Arbeitgeber kann nicht geändert werden', 'rt-employee-manager');
+            
+            // Set display value for the current user
+            $field['value'] = $current_user->ID;
+            $field['formatted_value'] = $current_user->display_name;
+        }
+        
+        return $field;
+    }
+
+    /**
+     * Format employer_id field display
+     */
+    public function format_employer_id_display($value, $post_id, $field)
+    {
+        if (empty($value)) {
+            return $value;
+        }
+
+        $user = get_userdata($value);
+        if ($user) {
+            return $user->display_name;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Clean placeholder data from fields
+     */
+    public function clean_placeholder_data($field)
+    {
+        global $post;
+        
+        if (!$post || $post->post_type !== 'angestellte') {
+            return $field;
+        }
+        
+        $placeholder_values = array(
+            'Max', 'Mustermann', '1234567890', 'Automatischt', 'gespeicherter'
+        );
+        
+        $current_value = get_field($field['name'], $post->ID);
+        
+        if (in_array($current_value, $placeholder_values)) {
+            // Clear the placeholder value
+            update_field($field['name'], '', $post->ID);
+            $field['value'] = '';
+        }
+        
+        return $field;
+    }
+
 }

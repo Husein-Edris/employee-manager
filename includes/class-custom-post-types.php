@@ -28,6 +28,11 @@ class RT_Employee_Manager_Custom_Post_Types {
         
         // Add row actions for both post types
         add_filter('post_row_actions', array($this, 'add_custom_row_actions'), 10, 2);
+        
+        // Disable visual editor and media uploads for employee posts
+        add_action('admin_head', array($this, 'disable_visual_editor_for_employees'));
+        add_action('admin_init', array($this, 'remove_media_buttons_for_employees'));
+        add_action('add_meta_boxes', array($this, 'remove_unnecessary_metaboxes'));
     }
     
     /**
@@ -81,7 +86,7 @@ class RT_Employee_Manager_Custom_Post_Types {
             'public' => false,
             'publicly_queryable' => false,
             'show_ui' => true,
-            'show_in_menu' => true,
+            'show_in_menu' => current_user_can('read'), // Allow kunden users to see menu
             'show_in_admin_bar' => true,
             'query_var' => true,
             'rewrite' => array('slug' => 'angestellte'),
@@ -105,7 +110,7 @@ class RT_Employee_Manager_Custom_Post_Types {
             'hierarchical' => false,
             'menu_position' => 20,
             'menu_icon' => 'dashicons-groups',
-            'supports' => array('title', 'editor', 'custom-fields'),
+            'supports' => array('title', 'custom-fields'),
             'show_in_rest' => false,
         );
         
@@ -154,7 +159,7 @@ class RT_Employee_Manager_Custom_Post_Types {
             'hierarchical' => false,
             'menu_position' => 21,
             'menu_icon' => 'dashicons-businessman',
-            'supports' => array('title', 'editor', 'custom-fields'),
+            'supports' => array('title', 'custom-fields'),
             'show_in_rest' => false,
         );
         
@@ -368,28 +373,12 @@ class RT_Employee_Manager_Custom_Post_Types {
         $employer_id = get_post_meta($post_id, 'employer_id', true);
         
         if (empty($vorname) || empty($employer_id)) {
-            // Set missing metadata based on post title and current user
-            $title_parts = explode(' ', $post->post_title);
-            $first_name = isset($title_parts[0]) ? $title_parts[0] : 'Max';
-            $last_name = isset($title_parts[1]) ? $title_parts[1] : 'Mustermann';
-            
-            if (empty($vorname)) {
-                update_post_meta($post_id, 'vorname', $first_name);
-            }
-            if (empty(get_post_meta($post_id, 'nachname', true))) {
-                update_post_meta($post_id, 'nachname', $last_name);
-            }
+            // Only set essential metadata without dummy data
             if (empty($employer_id)) {
                 update_post_meta($post_id, 'employer_id', $user_id);
             }
             if (empty(get_post_meta($post_id, 'status', true))) {
                 update_post_meta($post_id, 'status', 'active');
-            }
-            if (empty(get_post_meta($post_id, 'sozialversicherungsnummer', true))) {
-                update_post_meta($post_id, 'sozialversicherungsnummer', '1234567890');
-            }
-            if (empty(get_post_meta($post_id, 'eintrittsdatum', true))) {
-                update_post_meta($post_id, 'eintrittsdatum', date('d.m.Y'));
             }
             
             error_log('RT Employee Manager: Force-fixed metadata for employee post #' . $post_id . ' for user #' . $user_id);
@@ -549,5 +538,62 @@ class RT_Employee_Manager_Custom_Post_Types {
         }
         
         return $actions;
+    }
+    
+    /**
+     * Disable visual editor for employee posts
+     */
+    public function disable_visual_editor_for_employees() {
+        global $post_type;
+        
+        if ($post_type === 'angestellte') {
+            remove_post_type_support('angestellte', 'editor');
+            remove_post_type_support('angestellte', 'thumbnail');
+            
+            // Add CSS to hide remaining editor elements
+            echo '<style>
+                #postdivrich, #wp-content-wrap, #media-buttons { display: none !important; }
+                #normal-sortables .postbox { margin-bottom: 0; }
+                #post-body-content { margin-bottom: 10px; }
+            </style>';
+        }
+    }
+    
+    /**
+     * Remove media buttons for employee posts
+     */
+    public function remove_media_buttons_for_employees() {
+        global $post_type;
+        
+        if ($post_type === 'angestellte') {
+            remove_action('media_buttons', 'media_buttons');
+        }
+    }
+    
+    /**
+     * Remove unnecessary metaboxes for employee posts
+     */
+    public function remove_unnecessary_metaboxes() {
+        // Remove for angestellte post type
+        remove_meta_box('postexcerpt', 'angestellte', 'normal');
+        remove_meta_box('trackbacksdiv', 'angestellte', 'normal');
+        remove_meta_box('postcustom', 'angestellte', 'normal');
+        remove_meta_box('commentstatusdiv', 'angestellte', 'normal');
+        remove_meta_box('commentsdiv', 'angestellte', 'normal');
+        remove_meta_box('revisionsdiv', 'angestellte', 'normal');
+        remove_meta_box('authordiv', 'angestellte', 'normal');
+        remove_meta_box('postimagediv', 'angestellte', 'side');
+        remove_meta_box('pageparentdiv', 'angestellte', 'side');
+        
+        // Remove for kunde post type as well
+        remove_meta_box('postexcerpt', 'kunde', 'normal');
+        remove_meta_box('trackbacksdiv', 'kunde', 'normal');
+        remove_meta_box('postcustom', 'kunde', 'normal');
+        remove_meta_box('commentstatusdiv', 'kunde', 'normal');
+        remove_meta_box('commentsdiv', 'kunde', 'normal');
+        remove_meta_box('revisionsdiv', 'kunde', 'normal');
+        remove_meta_box('authordiv', 'kunde', 'normal');
+        remove_meta_box('postimagediv', 'kunde', 'side');
+        remove_meta_box('pageparentdiv', 'kunde', 'side');
     }
 }
