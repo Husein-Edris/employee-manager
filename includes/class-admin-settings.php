@@ -10,6 +10,7 @@ class RT_Employee_Manager_Admin_Settings {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        add_action('admin_init', array($this, 'handle_admin_actions'));
     }
     
     /**
@@ -22,8 +23,8 @@ class RT_Employee_Manager_Admin_Settings {
         if (!in_array('kunden', $current_user->roles)) {
             // Main menu page - accessible to both admins and kunden
             $main_page = add_menu_page(
-                __('RT Employee Manager', 'rt-employee-manager'),
-                __('Employee Manager', 'rt-employee-manager'),
+                __('Mitarbeiterverwaltung', 'rt-employee-manager'),
+                __('Mitarbeiterverwaltung', 'rt-employee-manager'),
                 'read',  // Allow kunden access
                 'rt-employee-manager',
                 array($this, 'admin_page'),
@@ -157,7 +158,7 @@ class RT_Employee_Manager_Admin_Settings {
         
         ?>
         <div class="wrap">
-            <h1><?php _e('RT Employee Manager Dashboard', 'rt-employee-manager'); ?></h1>
+            <h1><?php _e('Mitarbeiterverwaltung - Übersicht', 'rt-employee-manager'); ?></h1>
             
             <div class="rt-admin-dashboard">
                 <!-- Statistics -->
@@ -166,7 +167,7 @@ class RT_Employee_Manager_Admin_Settings {
                         <!-- Admin sees all stats -->
                         <div class="rt-stat-card">
                             <h3><?php echo number_format($total_employees); ?></h3>
-                            <p><?php _e('Mitarbeiter gesamt', 'rt-employee-manager'); ?></p>
+                            <p><?php _e('Registrierte Mitarbeiter', 'rt-employee-manager'); ?></p>
                             <a href="<?php echo admin_url('edit.php?post_type=angestellte'); ?>" class="rt-stat-link">
                                 <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
                             </a>
@@ -174,7 +175,7 @@ class RT_Employee_Manager_Admin_Settings {
                         
                         <div class="rt-stat-card">
                             <h3><?php echo number_format($total_clients); ?></h3>
-                            <p><?php _e('Kunden gesamt', 'rt-employee-manager'); ?></p>
+                            <p><?php _e('Registrierte Unternehmen', 'rt-employee-manager'); ?></p>
                             <a href="<?php echo admin_url('edit.php?post_type=kunde'); ?>" class="rt-stat-link">
                                 <?php _e('Alle anzeigen', 'rt-employee-manager'); ?>
                             </a>
@@ -182,7 +183,7 @@ class RT_Employee_Manager_Admin_Settings {
                         
                         <div class="rt-stat-card">
                             <h3><?php echo intval($this->get_active_employees_count()); ?></h3>
-                            <p><?php _e('Aktive Mitarbeiter', 'rt-employee-manager'); ?></p>
+                            <p><?php _e('Beschäftigte Mitarbeiter', 'rt-employee-manager'); ?></p>
                         </div>
                         
                         <div class="rt-stat-card">
@@ -203,14 +204,14 @@ class RT_Employee_Manager_Admin_Settings {
                         
                         <div class="rt-stat-card">
                             <h3><?php echo $this->get_user_active_employees_count($current_user->ID); ?></h3>
-                            <p><?php _e('Aktive Mitarbeiter', 'rt-employee-manager'); ?></p>
+                            <p><?php _e('Beschäftigte Mitarbeiter', 'rt-employee-manager'); ?></p>
                         </div>
                     <?php endif; ?>
                 </div>
                 
                 <!-- Quick Actions -->
                 <div class="rt-quick-actions">
-                    <h2><?php _e('Schnellaktionen', 'rt-employee-manager'); ?></h2>
+                    <h2><?php _e('Schnelle Aktionen', 'rt-employee-manager'); ?></h2>
                     <div class="rt-action-buttons">
                         <?php if (current_user_can('create_employees')): ?>
                             <a href="<?php echo admin_url('post-new.php?post_type=angestellte'); ?>" class="button button-primary">
@@ -219,7 +220,7 @@ class RT_Employee_Manager_Admin_Settings {
                         <?php endif; ?>
                         <?php if ($is_admin): ?>
                             <a href="<?php echo admin_url('post-new.php?post_type=kunde'); ?>" class="button button-secondary">
-                                <?php _e('Neuen Kunde hinzufügen', 'rt-employee-manager'); ?>
+                                <?php _e('Neues Unternehmen hinzufügen', 'rt-employee-manager'); ?>
                             </a>
                             <a href="<?php echo admin_url('admin.php?page=gf_edit_forms'); ?>" class="button button-secondary">
                                 <?php _e('Formulare bearbeiten', 'rt-employee-manager'); ?>
@@ -237,18 +238,18 @@ class RT_Employee_Manager_Admin_Settings {
                     <?php if (!empty($pending_registrations)): ?>
                         <div class="rt-pending-registrations">
                             <h2>
-                                <?php _e('Wartende Registrierungen', 'rt-employee-manager'); ?>
+                                <?php _e('Ausstehende Registrierungen', 'rt-employee-manager'); ?>
                                 <span class="count">(<?php echo count($pending_registrations); ?>)</span>
                             </h2>
                             <div class="rt-registration-list">
                                 <table class="wp-list-table widefat fixed striped">
                                     <thead>
                                         <tr>
-                                            <th><?php _e('Firma', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
                                             <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
                                             <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
-                                            <th><?php _e('Eingereicht', 'rt-employee-manager'); ?></th>
-                                            <th><?php _e('Aktionen', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('Eingereicht am', 'rt-employee-manager'); ?></th>
+                                            <th><?php _e('Verfügbare Aktionen', 'rt-employee-manager'); ?></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -301,7 +302,7 @@ class RT_Employee_Manager_Admin_Settings {
                                 <thead>
                                     <tr>
                                         <th><?php _e('Name', 'rt-employee-manager'); ?></th>
-                                        <th><?php _e('Arbeitgeber', 'rt-employee-manager'); ?></th>
+                                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
                                         <th><?php _e('Status', 'rt-employee-manager'); ?></th>
                                         <th><?php _e('Registriert', 'rt-employee-manager'); ?></th>
                                         <th><?php _e('Aktionen', 'rt-employee-manager'); ?></th>
@@ -330,7 +331,15 @@ class RT_Employee_Manager_Admin_Settings {
                                             </td>
                                             <td>
                                                 <span class="rt-status-badge status-<?php echo esc_attr($status); ?>">
-                                                    <?php echo esc_html(ucfirst($status)); ?>
+                                                    <?php 
+                                                    $status_labels = array(
+                                                        'active' => __('Beschäftigt', 'rt-employee-manager'),
+                                                        'inactive' => __('Beurlaubt', 'rt-employee-manager'),
+                                                        'suspended' => __('Suspendiert', 'rt-employee-manager'),
+                                                        'terminated' => __('Ausgeschieden', 'rt-employee-manager')
+                                                    );
+                                                    echo esc_html($status_labels[$status] ?? ucfirst($status)); 
+                                                    ?>
                                                 </span>
                                             </td>
                                             <td>
@@ -405,6 +414,14 @@ class RT_Employee_Manager_Admin_Settings {
                                         <span class="rt-status-ok">✅ <?php _e('OK', 'rt-employee-manager'); ?></span>
                                     <?php else: ?>
                                         <span class="rt-status-error">❌ <?php _e('Fehler', 'rt-employee-manager'); ?></span>
+                                        <br>
+                                        <form method="post" action="" style="display: inline;">
+                                            <?php wp_nonce_field('rt_create_tables', 'rt_create_tables_nonce'); ?>
+                                            <input type="hidden" name="rt_action" value="create_tables">
+                                            <button type="submit" class="button button-secondary" style="margin-top: 5px;">
+                                                <?php _e('Tabellen erstellen', 'rt-employee-manager'); ?>
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
                                 </td>
                             </tr>
@@ -966,6 +983,103 @@ class RT_Employee_Manager_Admin_Settings {
         return $wpdb->get_results(
             "SELECT * FROM {$table_name} WHERE status = 'pending' ORDER BY submitted_at DESC LIMIT 10"
         );
+    }
+    
+    /**
+     * Handle admin actions (form submissions)
+     */
+    public function handle_admin_actions() {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        
+        // Handle table creation
+        if (isset($_POST['rt_action']) && $_POST['rt_action'] === 'create_tables') {
+            if (!wp_verify_nonce($_POST['rt_create_tables_nonce'], 'rt_create_tables')) {
+                wp_die(__('Sicherheitsprüfung fehlgeschlagen', 'rt-employee-manager'));
+            }
+            
+            $this->create_database_tables();
+            
+            // Redirect to avoid resubmission
+            wp_redirect(add_query_arg('tables_created', '1', admin_url('admin.php?page=rt-employee-manager')));
+            exit;
+        }
+        
+        // Show success message
+        if (isset($_GET['tables_created']) && $_GET['tables_created'] === '1') {
+            add_action('admin_notices', function() {
+                echo '<div class="notice notice-success is-dismissible">';
+                echo '<p><strong>' . __('Datenbanktabellen erfolgreich erstellt!', 'rt-employee-manager') . '</strong></p>';
+                echo '</div>';
+            });
+        }
+    }
+    
+    /**
+     * Create database tables
+     */
+    private function create_database_tables() {
+        global $wpdb;
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        // Employee logs table
+        $table_name = $wpdb->prefix . 'rt_employee_logs';
+        
+        $sql = "CREATE TABLE $table_name (
+            id int(11) NOT NULL AUTO_INCREMENT,
+            employee_id int(11) NOT NULL,
+            action varchar(50) NOT NULL,
+            details text,
+            user_id int(11) NOT NULL,
+            ip_address varchar(45),
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY employee_id (employee_id),
+            KEY user_id (user_id)
+        ) $charset_collate;";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
+        
+        // Pending registrations table
+        $table_name = $wpdb->prefix . 'rt_pending_registrations';
+        
+        $sql = "CREATE TABLE $table_name (
+            id int(11) NOT NULL AUTO_INCREMENT,
+            company_name varchar(255) NOT NULL,
+            company_email varchar(255) NOT NULL,
+            company_phone varchar(50),
+            uid_number varchar(50),
+            company_street varchar(255),
+            company_postcode varchar(20),
+            company_city varchar(100),
+            company_country varchar(100),
+            contact_first_name varchar(100) NOT NULL,
+            contact_last_name varchar(100) NOT NULL,
+            contact_email varchar(255) NOT NULL,
+            status varchar(20) DEFAULT 'pending',
+            submitted_at datetime DEFAULT CURRENT_TIMESTAMP,
+            approved_at datetime,
+            approved_by int(11),
+            rejection_reason text,
+            ip_address varchar(45),
+            user_agent text,
+            gravity_form_entry_id int(11),
+            created_user_id int(11),
+            PRIMARY KEY (id),
+            KEY status (status),
+            KEY company_email (company_email),
+            KEY contact_email (contact_email),
+            KEY submitted_at (submitted_at),
+            KEY gravity_form_entry_id (gravity_form_entry_id),
+            KEY created_user_id (created_user_id)
+        ) $charset_collate;";
+        
+        dbDelta($sql);
+        
+        error_log('RT Employee Manager: Database tables created manually via admin button');
     }
     
 }

@@ -114,21 +114,21 @@ class RT_Employee_Manager_Employee_Dashboard {
                     </div>
                     <div class="rt-stat-card active">
                         <h3><?php echo intval($stats['active']); ?></h3>
-                        <p><?php _e('Aktiv', 'rt-employee-manager'); ?></p>
+                        <p><?php _e('Beschäftigt', 'rt-employee-manager'); ?></p>
                     </div>
                     <div class="rt-stat-card inactive">
                         <h3><?php echo intval($stats['inactive']); ?></h3>
-                        <p><?php _e('Inaktiv', 'rt-employee-manager'); ?></p>
+                        <p><?php _e('Beurlaubt', 'rt-employee-manager'); ?></p>
                     </div>
                     <div class="rt-stat-card terminated">
                         <h3><?php echo intval($stats['terminated']); ?></h3>
-                        <p><?php _e('Gekündigt', 'rt-employee-manager'); ?></p>
+                        <p><?php _e('Ausgeschieden', 'rt-employee-manager'); ?></p>
                     </div>
                 </div>
             </div>
             
             <!-- Search and Filters -->
-            <?php if ($atts['show_search'] === 'true' || $atts['show_filters'] === 'true'): ?>
+            <?php if (($atts['show_search'] === 'true' || $atts['show_filters'] === 'true') && $employees->found_posts >= 5): ?>
             <div class="rt-dashboard-controls">
                 <form method="get" class="rt-employee-search-form">
                     <?php if ($atts['show_search'] === 'true'): ?>
@@ -144,10 +144,10 @@ class RT_Employee_Manager_Employee_Dashboard {
                     <div class="rt-filter-field">
                         <select name="status_filter">
                             <option value=""><?php _e('Alle Status', 'rt-employee-manager'); ?></option>
-                            <option value="active" <?php selected($status_filter, 'active'); ?>><?php _e('Aktiv', 'rt-employee-manager'); ?></option>
-                            <option value="inactive" <?php selected($status_filter, 'inactive'); ?>><?php _e('Inaktiv', 'rt-employee-manager'); ?></option>
-                            <option value="suspended" <?php selected($status_filter, 'suspended'); ?>><?php _e('Gesperrt', 'rt-employee-manager'); ?></option>
-                            <option value="terminated" <?php selected($status_filter, 'terminated'); ?>><?php _e('Gekündigt', 'rt-employee-manager'); ?></option>
+                            <option value="active" <?php selected($status_filter, 'active'); ?>><?php _e('Beschäftigt', 'rt-employee-manager'); ?></option>
+                            <option value="inactive" <?php selected($status_filter, 'inactive'); ?>><?php _e('Beurlaubt', 'rt-employee-manager'); ?></option>
+                            <option value="suspended" <?php selected($status_filter, 'suspended'); ?>><?php _e('Suspendiert', 'rt-employee-manager'); ?></option>
+                            <option value="terminated" <?php selected($status_filter, 'terminated'); ?>><?php _e('Ausgeschieden', 'rt-employee-manager'); ?></option>
                         </select>
                     </div>
                     <?php endif; ?>
@@ -200,10 +200,11 @@ class RT_Employee_Manager_Employee_Dashboard {
                 <?php else: ?>
                     <div class="rt-no-employees">
                         <p><?php _e('Keine Mitarbeiter gefunden.', 'rt-employee-manager'); ?></p>
-                        <?php
-                        $form_id = get_option('rt_employee_manager_employee_form_id', 1);
-                        echo do_shortcode('[gravityform id="' . $form_id . '" title="false" description="false"]');
-                        ?>
+                        <div class="rt-add-employee-section">
+                            <a href="<?php echo admin_url('post-new.php?post_type=angestellte'); ?>" class="button button-primary">
+                                <?php _e('Ersten Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
+                            </a>
+                        </div>
                     </div>
                 <?php endif; ?>
                 
@@ -243,10 +244,10 @@ class RT_Employee_Manager_Employee_Dashboard {
         }
         
         $status_labels = array(
-            'active' => __('Aktiv', 'rt-employee-manager'),
-            'inactive' => __('Inaktiv', 'rt-employee-manager'),
-            'suspended' => __('Gesperrt', 'rt-employee-manager'),
-            'terminated' => __('Gekündigt', 'rt-employee-manager')
+            'active' => __('Beschäftigt', 'rt-employee-manager'),
+            'inactive' => __('Beurlaubt', 'rt-employee-manager'),
+            'suspended' => __('Suspendiert', 'rt-employee-manager'),
+            'terminated' => __('Ausgeschieden', 'rt-employee-manager')
         );
         ?>
         <tr data-employee-id="<?php echo esc_attr($employee_id); ?>" class="employee-row status-<?php echo esc_attr($status); ?>">

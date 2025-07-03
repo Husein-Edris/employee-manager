@@ -19,6 +19,10 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         // Post creation hooks
         add_action('gform_post_submission', array($this, 'after_post_creation'), 10, 2);
         
+        // Fix rate limiting for registration forms
+        add_filter('gform_form_limit_exceeded', array($this, 'bypass_rate_limiting_for_registration'), 10, 5);
+        add_filter('gform_entry_limit_exceeded_message', array($this, 'custom_rate_limit_message'), 10, 4);
+        
         // Enqueue scripts
         add_action('gform_enqueue_scripts', array($this, 'enqueue_scripts'));
         
@@ -424,8 +428,8 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         
         wp_mail(
             $admin_email,
-            sprintf(__('Neuer Kunde registriert: %s', 'rt-employee-manager'), $company_name),
-            sprintf(__('Ein neuer Kunde wurde registriert: %s', 'rt-employee-manager'), $company_name)
+            sprintf(__('Neues Unternehmen registriert: %s', 'rt-employee-manager'), $company_name),
+            sprintf(__('Ein neues Unternehmen wurde registriert: %s', 'rt-employee-manager'), $company_name)
         );
     }
     
@@ -450,6 +454,35 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         if (get_option('rt_employee_manager_enable_logging')) {
             error_log('RT Employee Manager [SUCCESS]: ' . $message . ' - ' . print_r($data, true));
         }
+    }
+    
+    /**
+     * Bypass rate limiting for registration forms
+     */
+    public function bypass_rate_limiting_for_registration($is_limit_exceeded, $form, $entry, $entry_limit, $range) {
+        // Get registration form ID from settings
+        $registration_form_id = get_option('rt_employee_manager_registration_form_id', '3');
+        
+        // Allow unlimited submissions for registration form
+        if ($form['id'] == $registration_form_id) {
+            return false; // No limit exceeded
+        }
+        
+        return $is_limit_exceeded;
+    }
+    
+    /**
+     * Custom rate limit message for other forms
+     */
+    public function custom_rate_limit_message($message, $form, $entry_limit, $range) {
+        $registration_form_id = get_option('rt_employee_manager_registration_form_id', '3');
+        
+        // Don't show message for registration form
+        if ($form['id'] == $registration_form_id) {
+            return '';
+        }
+        
+        return __('Zu viele Versuche. Bitte warten Sie eine Stunde oder kontaktieren Sie den Administrator.', 'rt-employee-manager');
     }
 }
 

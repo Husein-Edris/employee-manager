@@ -67,21 +67,21 @@ class RT_Employee_Manager_Custom_Post_Types {
         
         // Register Angestellte (Employee) post type
         $args = array(
-            'label' => __('Angestellte', 'rt-employee-manager'),
+            'label' => __('Mitarbeiter', 'rt-employee-manager'),
             'labels' => array(
-                'name' => __('Angestellte', 'rt-employee-manager'),
-                'singular_name' => __('Angestellte', 'rt-employee-manager'),
-                'menu_name' => __('Angestellte', 'rt-employee-manager'),
-                'name_admin_bar' => __('Angestellte', 'rt-employee-manager'),
-                'add_new' => __('Neue hinzufügen', 'rt-employee-manager'),
-                'add_new_item' => __('Neue Angestellte hinzufügen', 'rt-employee-manager'),
-                'new_item' => __('Neue Angestellte', 'rt-employee-manager'),
-                'edit_item' => __('Angestellte bearbeiten', 'rt-employee-manager'),
-                'view_item' => __('Angestellte anzeigen', 'rt-employee-manager'),
-                'all_items' => __('Alle Angestellte', 'rt-employee-manager'),
-                'search_items' => __('Angestellte suchen', 'rt-employee-manager'),
-                'not_found' => __('Keine Angestellte gefunden', 'rt-employee-manager'),
-                'not_found_in_trash' => __('Keine Angestellte im Papierkorb gefunden', 'rt-employee-manager'),
+                'name' => __('Mitarbeiter', 'rt-employee-manager'),
+                'singular_name' => __('Mitarbeiter', 'rt-employee-manager'),
+                'menu_name' => __('Mitarbeiter', 'rt-employee-manager'),
+                'name_admin_bar' => __('Mitarbeiter', 'rt-employee-manager'),
+                'add_new' => __('Neuen hinzufügen', 'rt-employee-manager'),
+                'add_new_item' => __('Neuen Mitarbeiter hinzufügen', 'rt-employee-manager'),
+                'new_item' => __('Neuer Mitarbeiter', 'rt-employee-manager'),
+                'edit_item' => __('Mitarbeiter bearbeiten', 'rt-employee-manager'),
+                'view_item' => __('Mitarbeiter anzeigen', 'rt-employee-manager'),
+                'all_items' => __('Alle Mitarbeiter', 'rt-employee-manager'),
+                'search_items' => __('Mitarbeiter suchen', 'rt-employee-manager'),
+                'not_found' => __('Keine Mitarbeiter gefunden', 'rt-employee-manager'),
+                'not_found_in_trash' => __('Keine Mitarbeiter im Papierkorb gefunden', 'rt-employee-manager'),
             ),
             'public' => false,
             'publicly_queryable' => false,
@@ -118,21 +118,21 @@ class RT_Employee_Manager_Custom_Post_Types {
         
         // Register Kunde (Client) post type - only visible to admins
         $kunde_args = array(
-            'label' => __('Kunden', 'rt-employee-manager'),
+            'label' => __('Unternehmen', 'rt-employee-manager'),
             'labels' => array(
-                'name' => __('Kunden', 'rt-employee-manager'),
-                'singular_name' => __('Kunde', 'rt-employee-manager'),
-                'menu_name' => __('Kunden', 'rt-employee-manager'),
-                'name_admin_bar' => __('Kunde', 'rt-employee-manager'),
-                'add_new' => __('Neuen hinzufügen', 'rt-employee-manager'),
-                'add_new_item' => __('Neuen Kunde hinzufügen', 'rt-employee-manager'),
-                'new_item' => __('Neuer Kunde', 'rt-employee-manager'),
-                'edit_item' => __('Kunde bearbeiten', 'rt-employee-manager'),
-                'view_item' => __('Kunde anzeigen', 'rt-employee-manager'),
-                'all_items' => __('Alle Kunden', 'rt-employee-manager'),
-                'search_items' => __('Kunden suchen', 'rt-employee-manager'),
-                'not_found' => __('Keine Kunden gefunden', 'rt-employee-manager'),
-                'not_found_in_trash' => __('Keine Kunden im Papierkorb gefunden', 'rt-employee-manager'),
+                'name' => __('Unternehmen', 'rt-employee-manager'),
+                'singular_name' => __('Unternehmen', 'rt-employee-manager'),
+                'menu_name' => __('Unternehmen', 'rt-employee-manager'),
+                'name_admin_bar' => __('Unternehmen', 'rt-employee-manager'),
+                'add_new' => __('Neues hinzufügen', 'rt-employee-manager'),
+                'add_new_item' => __('Neues Unternehmen hinzufügen', 'rt-employee-manager'),
+                'new_item' => __('Neues Unternehmen', 'rt-employee-manager'),
+                'edit_item' => __('Unternehmen bearbeiten', 'rt-employee-manager'),
+                'view_item' => __('Unternehmen anzeigen', 'rt-employee-manager'),
+                'all_items' => __('Alle Unternehmen', 'rt-employee-manager'),
+                'search_items' => __('Unternehmen suchen', 'rt-employee-manager'),
+                'not_found' => __('Keine Unternehmen gefunden', 'rt-employee-manager'),
+                'not_found_in_trash' => __('Keine Unternehmen im Papierkorb gefunden', 'rt-employee-manager'),
             ),
             'public' => false,
             'publicly_queryable' => false,
@@ -207,7 +207,7 @@ class RT_Employee_Manager_Custom_Post_Types {
         
         // Create Kunden role with limited capabilities
         if (!get_role('kunden')) {
-            add_role('kunden', __('Kunden', 'rt-employee-manager'), array(
+            add_role('kunden', __('Unternehmensvertreter', 'rt-employee-manager'), array(
                 'read' => true,
                 'edit_posts' => true,  // Added for dashboard access
                 'create_employees' => true,
@@ -429,9 +429,9 @@ class RT_Employee_Manager_Custom_Post_Types {
         $new_columns = array();
         $new_columns['cb'] = $columns['cb'];
         $new_columns['title'] = $columns['title'];
-        $new_columns['employee_svnr'] = __('SVNR', 'rt-employee-manager');
-        $new_columns['employee_status'] = __('Status', 'rt-employee-manager');
-        $new_columns['employee_employer'] = __('Arbeitgeber', 'rt-employee-manager');
+        $new_columns['employee_svnr'] = __('Sozialversicherungsnummer', 'rt-employee-manager');
+        $new_columns['employee_status'] = __('Beschäftigungsstatus', 'rt-employee-manager');
+        $new_columns['employee_employer'] = __('Unternehmen', 'rt-employee-manager');
         $new_columns['date'] = $columns['date'];
         
         return $new_columns;
@@ -454,10 +454,10 @@ class RT_Employee_Manager_Custom_Post_Types {
             case 'employee_status':
                 $status = get_post_meta($post_id, 'status', true) ?: 'active';
                 $status_labels = array(
-                    'active' => __('Aktiv', 'rt-employee-manager'),
-                    'inactive' => __('Inaktiv', 'rt-employee-manager'),
-                    'suspended' => __('Gesperrt', 'rt-employee-manager'),
-                    'terminated' => __('Gekündigt', 'rt-employee-manager')
+                    'active' => __('Beschäftigt', 'rt-employee-manager'),
+                    'inactive' => __('Beurlaubt', 'rt-employee-manager'),
+                    'suspended' => __('Suspendiert', 'rt-employee-manager'),
+                    'terminated' => __('Ausgeschieden', 'rt-employee-manager')
                 );
                 echo '<span class="status-' . esc_attr($status) . '">' . esc_html($status_labels[$status] ?? $status) . '</span>';
                 break;

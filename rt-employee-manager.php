@@ -67,9 +67,6 @@ class RT_Employee_Manager {
             add_filter('gform_form_limit_exceeded', '__return_false');
             add_filter('gform_enable_duplicate_prevention', '__return_false');
             add_filter('gform_duplicate_message', '__return_false');
-            
-            // Add email logging for local development
-            add_filter('wp_mail', array($this, 'log_emails_locally'));
         }
     }
     
@@ -142,7 +139,7 @@ class RT_Employee_Manager {
         if (!empty($missing)) {
             echo '<div class="notice notice-error"><p>';
             echo sprintf(
-                __('RT Employee Manager requires the following plugins: %s', 'rt-employee-manager'),
+                __('RT Mitarbeiterverwaltung benötigt die folgenden Plugins: %s', 'rt-employee-manager'),
                 esc_html(implode(', ', $missing))
             );
             echo '</p></div>';
@@ -267,8 +264,8 @@ class RT_Employee_Manager {
         // Show notice for 5 minutes after deactivation
         if ($deactivated_time && (time() - $deactivated_time) < 300) {
             echo '<div class="notice notice-info is-dismissible">';
-            echo '<p><strong>RT Employee Manager:</strong> ';
-            echo __('Plugin has been deactivated. Custom post types (Angestellte, Kunden) and related functionality are now disabled. You may need to refresh the page to see changes.', 'rt-employee-manager');
+            echo '<p><strong>RT Mitarbeiterverwaltung:</strong> ';
+            echo __('Plugin wurde deaktiviert. Benutzerdefinierte Inhaltstypen (Mitarbeiter, Unternehmen) und verwandte Funktionen sind jetzt deaktiviert. Sie müssen möglicherweise die Seite aktualisieren, um Änderungen zu sehen.', 'rt-employee-manager');
             echo '</p></div>';
             
             // Clear the flag after showing the notice
@@ -289,48 +286,48 @@ class RT_Employee_Manager {
         
         // Check if WP_DEBUG is enabled in production
         if (defined('WP_DEBUG') && WP_DEBUG && (!defined('WP_ENVIRONMENT_TYPE') || WP_ENVIRONMENT_TYPE !== 'local')) {
-            $warnings[] = __('WP_DEBUG is enabled on a production site. Consider disabling it for security.', 'rt-employee-manager');
+            $warnings[] = __('WP_DEBUG ist auf einer Produktionsseite aktiviert. Erwägen Sie, es aus Sicherheitsgründen zu deaktivieren.', 'rt-employee-manager');
         }
         
         // Check if error logging is exposed
         if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG && ini_get('log_errors')) {
             $log_file = WP_CONTENT_DIR . '/debug.log';
             if (file_exists($log_file) && is_readable($log_file) && filesize($log_file) > 1024 * 1024) { // > 1MB
-                $warnings[] = __('Debug log file is large (>1MB). Consider clearing it or disabling debug logging.', 'rt-employee-manager');
+                $warnings[] = __('Debug-Log-Datei ist groß (>1MB). Erwägen Sie, sie zu löschen oder die Debug-Protokollierung zu deaktivieren.', 'rt-employee-manager');
             }
         }
         
         // Check if admin email is set properly
         $admin_email = get_option('admin_email');
         if (empty($admin_email) || $admin_email === 'admin@example.com' || strpos($admin_email, 'changeme') !== false) {
-            $warnings[] = __('Admin email is not properly configured. Registration notifications may not work.', 'rt-employee-manager');
+            $warnings[] = __('Administrator-E-Mail ist nicht richtig konfiguriert. Registrierungsbenachrichtigungen funktionieren möglicherweise nicht.', 'rt-employee-manager');
         }
         
         // Check if required plugins are active
         if (!class_exists('GFForms')) {
-            $warnings[] = __('Gravity Forms is not active. Employee registration will not work.', 'rt-employee-manager');
+            $warnings[] = __('Gravity Forms ist nicht aktiv. Mitarbeiterregistrierung funktioniert nicht.', 'rt-employee-manager');
         }
         
         if (!class_exists('GF_Advanced_Post_Creation')) {
-            $warnings[] = __('Gravity Forms Advanced Post Creation is not active. Some features may not work.', 'rt-employee-manager');
+            $warnings[] = __('Gravity Forms Advanced Post Creation ist nicht aktiv. Einige Funktionen funktionieren möglicherweise nicht.', 'rt-employee-manager');
         }
         
         // Check file permissions
         $upload_dir = wp_upload_dir();
         if (!wp_is_writable($upload_dir['basedir'])) {
-            $warnings[] = __('Uploads directory is not writable. Email logging and file uploads may fail.', 'rt-employee-manager');
+            $warnings[] = __('Upload-Verzeichnis ist nicht beschreibbar. E-Mail-Protokollierung und Datei-Uploads können fehlschlagen.', 'rt-employee-manager');
         }
         
         // Display warnings if any
         if (!empty($warnings)) {
             echo '<div class="notice notice-warning">';
-            echo '<p><strong>' . __('RT Employee Manager - Production Warnings:', 'rt-employee-manager') . '</strong></p>';
+            echo '<p><strong>' . __('RT Mitarbeiterverwaltung - Produktionswarnungen:', 'rt-employee-manager') . '</strong></p>';
             echo '<ul>';
             foreach ($warnings as $warning) {
                 echo '<li>' . esc_html($warning) . '</li>';
             }
             echo '</ul>';
-            echo '<p><em>' . __('These are recommendations for optimal security and functionality.', 'rt-employee-manager') . '</em></p>';
+            echo '<p><em>' . __('Dies sind Empfehlungen für optimale Sicherheit und Funktionalität.', 'rt-employee-manager') . '</em></p>';
             echo '</div>';
         }
     }
@@ -438,38 +435,6 @@ class RT_Employee_Manager {
         }
     }
     
-    /**
-     * Log emails locally instead of sending them (development only)
-     */
-    public function log_emails_locally($args) {
-        $log_entry = array(
-            'timestamp' => current_time('Y-m-d H:i:s'),
-            'to' => is_array($args['to']) ? implode(', ', $args['to']) : $args['to'],
-            'subject' => $args['subject'],
-            'message' => $args['message'],
-            'headers' => is_array($args['headers']) ? implode(', ', $args['headers']) : $args['headers']
-        );
-        
-        // Use uploads directory for better security
-        $upload_dir = wp_upload_dir();
-        $log_file = $upload_dir['basedir'] . '/rt-email-log.txt';
-        
-        $log_content = "=== EMAIL LOG ===\n";
-        $log_content .= "Time: " . $log_entry['timestamp'] . "\n";
-        $log_content .= "To: " . $log_entry['to'] . "\n";
-        $log_content .= "Subject: " . $log_entry['subject'] . "\n";
-        $log_content .= "Headers: " . $log_entry['headers'] . "\n";
-        $log_content .= "Message:\n" . $log_entry['message'] . "\n";
-        $log_content .= "=================\n\n";
-        
-        // Secure file writing with error handling
-        if (wp_is_writable($upload_dir['basedir'])) {
-            file_put_contents($log_file, $log_content, FILE_APPEND | LOCK_EX);
-        }
-        
-        // Return false to prevent actual sending in local environment
-        return false;
-    }
     
     /**
      * Fix WordPress menu arrays that get corrupted by Admin Site Enhancements plugin
@@ -616,8 +581,8 @@ class RT_Employee_Manager {
         
         // Ensure our Employee Manager menu is properly positioned
         add_menu_page(
-            __('Employee Manager', 'rt-employee-manager'),
-            __('Employee Manager', 'rt-employee-manager'),
+            __('Mitarbeiterverwaltung', 'rt-employee-manager'),
+            __('Mitarbeiterverwaltung', 'rt-employee-manager'),
             'read',
             'rt-employee-manager',
             array($admin_settings, 'admin_page'),
@@ -627,8 +592,8 @@ class RT_Employee_Manager {
         
         // Add Angestellte menu item for kunden users
         add_menu_page(
-            __('Angestellte', 'rt-employee-manager'),
-            __('Angestellte', 'rt-employee-manager'),
+            __('Mitarbeiter', 'rt-employee-manager'),
+            __('Mitarbeiter', 'rt-employee-manager'),
             'read',
             'edit.php?post_type=angestellte',
             '',
@@ -657,10 +622,10 @@ class RT_Employee_Manager {
         
         // Add Employee Manager as primary menu item
         $clean_menu[26] = array(
-            'Employee Manager',
+            'Mitarbeiterverwaltung',
             'read',
             'rt-employee-manager',
-            'Employee Manager',
+            'Mitarbeiterverwaltung',
             'menu-top menu-icon-rt-employee',
             'menu-rt-employee-manager',
             'dashicons-groups'
@@ -668,10 +633,10 @@ class RT_Employee_Manager {
         
         // Add Angestellte submenu
         $clean_menu[27] = array(
-            'Angestellte',
+            'Mitarbeiter',
             'read',
             'edit.php?post_type=angestellte',
-            'Angestellte',
+            'Mitarbeiter',
             'menu-top',
             'menu-angestellte',
             'dashicons-admin-users'

@@ -34,7 +34,7 @@ class RT_Employee_Manager_ACF_Integration
         // Employee (Angestellte) field group
         acf_add_local_field_group(array(
             'key' => 'group_angestellte_details',
-            'title' => __('Angestellte Details', 'rt-employee-manager'),
+            'title' => __('Mitarbeiterdaten', 'rt-employee-manager'),
             'fields' => array(
                 array(
                     'key' => 'field_anrede',
@@ -71,7 +71,7 @@ class RT_Employee_Manager_ACF_Integration
                     'name' => 'sozialversicherungsnummer',
                     'type' => 'text',
                     'required' => 1,
-                    'instructions' => __('Sozialversicherungsnummer ohne Leerzeichen eingeben', 'rt-employee-manager'),
+                    'instructions' => __('Bitte die 10-stellige Sozialversicherungsnummer ohne Leerzeichen eingeben', 'rt-employee-manager'),
                     'wrapper' => array('width' => '50'),
                     'maxlength' => 10
                 ),
@@ -93,7 +93,7 @@ class RT_Employee_Manager_ACF_Integration
                 ),
                 array(
                     'key' => 'field_email',
-                    'label' => __('E-Mail Adresse', 'rt-employee-manager'),
+                    'label' => __('E-Mail-Adresse', 'rt-employee-manager'),
                     'name' => 'email',
                     'type' => 'email',
                     'wrapper' => array('width' => '50'),
@@ -224,7 +224,7 @@ class RT_Employee_Manager_ACF_Integration
                 ),
                 array(
                     'key' => 'field_employer_id',
-                    'label' => __('Arbeitgeber ID', 'rt-employee-manager'),
+                    'label' => __('Zugehöriges Unternehmen', 'rt-employee-manager'),
                     'name' => 'employer_id',
                     'type' => 'user',
                     'role' => array('kunden', 'administrator'),
@@ -233,14 +233,14 @@ class RT_Employee_Manager_ACF_Integration
                 ),
                 array(
                     'key' => 'field_status',
-                    'label' => __('Status', 'rt-employee-manager'),
+                    'label' => __('Beschäftigungsstatus', 'rt-employee-manager'),
                     'name' => 'status',
                     'type' => 'select',
                     'choices' => array(
-                        'active' => __('Aktiv', 'rt-employee-manager'),
-                        'inactive' => __('Inaktiv', 'rt-employee-manager'),
-                        'suspended' => __('Gesperrt', 'rt-employee-manager'),
-                        'terminated' => __('Gekündigt', 'rt-employee-manager')
+                        'active' => __('Beschäftigt', 'rt-employee-manager'),
+                        'inactive' => __('Beurlaubt', 'rt-employee-manager'),
+                        'suspended' => __('Suspendiert', 'rt-employee-manager'),
+                        'terminated' => __('Ausgeschieden', 'rt-employee-manager')
                     ),
                     'wrapper' => array('width' => '50'),
                 ),
@@ -272,11 +272,11 @@ class RT_Employee_Manager_ACF_Integration
         // Client (Kunde) field group
         acf_add_local_field_group(array(
             'key' => 'group_kunden_details',
-            'title' => __('Kunden Details', 'rt-employee-manager'),
+            'title' => __('Unternehmensdaten', 'rt-employee-manager'),
             'fields' => array(
                 array(
                     'key' => 'field_company_name',
-                    'label' => __('Firmenname', 'rt-employee-manager'),
+                    'label' => __('Unternehmensname', 'rt-employee-manager'),
                     'name' => 'company_name',
                     'type' => 'text',
                     'required' => 1,
@@ -542,7 +542,7 @@ class RT_Employee_Manager_ACF_Integration
         if (in_array('kunden', $current_user->roles) && !current_user_can('manage_options')) {
             $field['readonly'] = 1;
             $field['disabled'] = 1;
-            $field['instructions'] = __('Arbeitgeber kann nicht geändert werden', 'rt-employee-manager');
+            $field['instructions'] = __('Unternehmen kann nicht geändert werden', 'rt-employee-manager');
             
             // Set display value for the current user
             $field['value'] = $current_user->ID;
