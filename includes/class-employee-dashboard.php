@@ -227,12 +227,12 @@ class RT_Employee_Manager_Employee_Dashboard {
      * Render employee table row
      */
     private function render_employee_row($employee_id, $atts) {
-        $vorname = get_field('vorname', $employee_id);
-        $nachname = get_field('nachname', $employee_id);
-        $svnr = get_field('sozialversicherungsnummer', $employee_id);
-        $position = get_field('bezeichnung_der_tatigkeit', $employee_id);
-        $eintrittsdatum = get_field('eintrittsdatum', $employee_id);
-        $status = get_field('status', $employee_id) ?: 'active';
+        $vorname = get_post_meta($employee_id, 'vorname', true);
+        $nachname = get_post_meta($employee_id, 'nachname', true);
+        $svnr = get_post_meta($employee_id, 'sozialversicherungsnummer', true);
+        $position = get_post_meta($employee_id, 'bezeichnung_der_tatigkeit', true);
+        $eintrittsdatum = get_post_meta($employee_id, 'eintrittsdatum', true);
+        $status = get_post_meta($employee_id, 'status', true) ?: 'active';
         
         // Format SVNR for display
         $formatted_svnr = '';
@@ -417,11 +417,17 @@ class RT_Employee_Manager_Employee_Dashboard {
             wp_die(__('Keine Berechtigung', 'rt-employee-manager'));
         }
         
-        // Get all field data
-        $fields = get_fields($employee_id);
+        // Get all meta data
+        $fields = get_post_meta($employee_id);
+        
+        // Clean up the data (remove arrays and keep only single values)
+        $clean_fields = array();
+        foreach ($fields as $key => $value) {
+            $clean_fields[$key] = is_array($value) && count($value) === 1 ? $value[0] : $value;
+        }
         
         wp_send_json_success(array(
-            'fields' => $fields,
+            'fields' => $clean_fields,
             'post_title' => get_the_title($employee_id)
         ));
     }

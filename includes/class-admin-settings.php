@@ -228,6 +228,13 @@ class RT_Employee_Manager_Admin_Settings {
                             <a href="<?php echo admin_url('admin.php?page=rt-employee-manager-settings'); ?>" class="button button-secondary">
                                 <?php _e('Einstellungen', 'rt-employee-manager'); ?>
                             </a>
+                            <form method="post" action="" style="display: inline;">
+                                <?php wp_nonce_field('rt_refresh_menu', 'rt_refresh_menu_nonce'); ?>
+                                <input type="hidden" name="rt_action" value="refresh_menu">
+                                <button type="submit" class="button button-secondary">
+                                    <?php _e('Menü & Cache leeren', 'rt-employee-manager'); ?>
+                                </button>
+                            </form>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -381,17 +388,6 @@ class RT_Employee_Manager_Admin_Settings {
                                     <?php if (class_exists('GFForms')): ?>
                                         <span class="rt-status-ok">✅ <?php _e('Aktiv', 'rt-employee-manager'); ?></span>
                                         <small>(Version: <?php echo esc_html(GFCommon::$version); ?>)</small>
-                                    <?php else: ?>
-                                        <span class="rt-status-error">❌ <?php _e('Nicht installiert', 'rt-employee-manager'); ?></span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><?php _e('Advanced Custom Fields', 'rt-employee-manager'); ?></td>
-                                <td>
-                                    <?php if (function_exists('acf')): ?>
-                                        <span class="rt-status-ok">✅ <?php _e('Aktiv', 'rt-employee-manager'); ?></span>
-                                        <small>(Version: <?php echo acf()->version; ?>)</small>
                                     <?php else: ?>
                                         <span class="rt-status-error">❌ <?php _e('Nicht installiert', 'rt-employee-manager'); ?></span>
                                     <?php endif; ?>
@@ -1014,6 +1010,27 @@ class RT_Employee_Manager_Admin_Settings {
                 echo '</div>';
             });
         }
+        
+        // Handle menu refresh
+        if (isset($_POST['rt_action']) && $_POST['rt_action'] === 'refresh_menu') {
+            if (!wp_verify_nonce($_POST['rt_refresh_menu_nonce'], 'rt_refresh_menu')) {
+                wp_die(__('Sicherheitsprüfung fehlgeschlagen', 'rt-employee-manager'));
+            }
+            
+            $this->force_menu_refresh();
+            
+            wp_redirect(add_query_arg('menu_refreshed', '1', admin_url('admin.php?page=rt-employee-manager')));
+            exit;
+        }
+        
+        // Show menu refresh success message
+        if (isset($_GET['menu_refreshed']) && $_GET['menu_refreshed'] === '1') {
+            add_action('admin_notices', function() {
+                echo '<div class="notice notice-success is-dismissible">';
+                echo '<p><strong>' . __('Menü erfolgreich aktualisiert! Bitte laden Sie die Seite neu.', 'rt-employee-manager') . '</strong></p>';
+                echo '</div>';
+            });
+        }
     }
     
     /**
@@ -1080,6 +1097,55 @@ class RT_Employee_Manager_Admin_Settings {
         dbDelta($sql);
         
         error_log('RT Employee Manager: Database tables created manually via admin button');
+    }
+    
+    /**
+     * Force menu refresh
+     */
+    private function force_menu_refresh() {
+        // Clear all caches
+        wp_cache_flush();
+        
+        // Clear WordPress object cache
+        if (function_exists('wp_cache_delete_group')) {
+            wp_cache_delete_group('options');
+            wp_cache_delete_group('posts');
+            wp_cache_delete_group('post_meta');
+        }
+        
+        // Clear menu-related options
+        delete_option('_transient_doing_cron');
+        delete_transient('rt_admin_stats');
+        
+        // Clear user meta cache (menu preferences)
+        $users = get_users(array('fields' => 'ID', 'number' => 100));
+        foreach ($users as $user_id) {
+            clean_user_cache($user_id);
+            delete_user_meta($user_id, 'managenav-menuscolumnshidden');
+            delete_user_meta($user_id, 'metaboxhidden_nav-menus');
+            delete_user_meta($user_id, 'nav_menu_recently_edited');
+        }
+        
+        // Force capabilities refresh
+        global $wp_roles;
+        if (isset($wp_roles)) {
+            $wp_roles = null;
+        }
+        
+        // Clear menu globals
+        global $menu, $submenu, $_wp_menu_nopriv, $_wp_submenu_nopriv;
+        $menu = null;
+        $submenu = null;
+        $_wp_menu_nopriv = null;
+        $_wp_submenu_nopriv = null;
+        
+        // Force rewrite rules flush
+        flush_rewrite_rules(true);
+        
+        // Re-register post types with fresh labels
+        do_action('init');
+        
+        error_log('RT Employee Manager: Complete cache and menu refresh performed');
     }
     
 }

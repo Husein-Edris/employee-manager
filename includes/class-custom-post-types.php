@@ -65,6 +65,9 @@ class RT_Employee_Manager_Custom_Post_Types {
             return;
         }
         
+        // Force flush rewrite rules to clear any cached post type data
+        add_action('shutdown', 'flush_rewrite_rules');
+        
         // Register Angestellte (Employee) post type
         $args = array(
             'label' => __('Mitarbeiter', 'rt-employee-manager'),

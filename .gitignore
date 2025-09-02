@@ -1,0 +1,7 @@
+# Ignore cloud files and task files
+TODOS.md
+CLAUDE.md
+*.icloud
+.DS_Store
+TESTING.md
+USER-TESTING.md

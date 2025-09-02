@@ -1,0 +1,594 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class RT_Employee_Manager_Meta_Boxes {
+    
+    public function __construct() {
+        add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
+        add_action('save_post', array($this, 'save_meta_boxes'), 10, 2);
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        add_action('admin_init', array($this, 'cleanup_placeholder_data'));
+    }
+    
+    /**
+     * Add meta boxes
+     */
+    public function add_meta_boxes() {
+        // Employee meta box
+        add_meta_box(
+            'rt_employee_details',
+            __('Mitarbeiterdaten', 'rt-employee-manager'),
+            array($this, 'employee_meta_box_callback'),
+            'angestellte',
+            'normal',
+            'high'
+        );
+        
+        // Company meta box
+        add_meta_box(
+            'rt_company_details',
+            __('Unternehmensdaten', 'rt-employee-manager'),
+            array($this, 'company_meta_box_callback'),
+            'kunde',
+            'normal',
+            'high'
+        );
+    }
+    
+    /**
+     * Employee meta box callback
+     */
+    public function employee_meta_box_callback($post) {
+        wp_nonce_field('rt_employee_meta_box', 'rt_employee_meta_box_nonce');
+        
+        // Get existing values and clean placeholder data
+        $anrede = get_post_meta($post->ID, 'anrede', true);
+        $vorname = get_post_meta($post->ID, 'vorname', true);
+        $nachname = get_post_meta($post->ID, 'nachname', true);
+        $svnr = get_post_meta($post->ID, 'sozialversicherungsnummer', true);
+        $geburtsdatum = get_post_meta($post->ID, 'geburtsdatum', true);
+        $staatsangehoerigkeit = get_post_meta($post->ID, 'staatsangehoerigkeit', true);
+        $email = get_post_meta($post->ID, 'email', true);
+        
+        // Clean placeholder data
+        $placeholder_values = array('Max', 'Mustermann', '1234567890', 'Automatisch', 'gespeicherter');
+        if (in_array($vorname, $placeholder_values)) $vorname = '';
+        if (in_array($nachname, $placeholder_values)) $nachname = '';
+        if (in_array($svnr, $placeholder_values)) $svnr = '';
+        if (in_array($staatsangehoerigkeit, $placeholder_values)) $staatsangehoerigkeit = '';
+        $adresse = get_post_meta($post->ID, 'adresse', true);
+        $personenstand = get_post_meta($post->ID, 'personenstand', true);
+        $eintrittsdatum = get_post_meta($post->ID, 'eintrittsdatum', true);
+        $bezeichnung_der_tatigkeit = get_post_meta($post->ID, 'bezeichnung_der_tatigkeit', true);
+        $art_des_dienstverhaltnisses = get_post_meta($post->ID, 'art_des_dienstverhaltnisses', true);
+        $arbeitszeit_pro_woche = get_post_meta($post->ID, 'arbeitszeit_pro_woche', true);
+        $arbeitstagen = get_post_meta($post->ID, 'arbeitstagen', true);
+        $gehaltlohn = get_post_meta($post->ID, 'gehaltlohn', true);
+        $type = get_post_meta($post->ID, 'type', true);
+        $employer_id = get_post_meta($post->ID, 'employer_id', true);
+        $status = get_post_meta($post->ID, 'status', true) ?: 'active';
+        $anmerkungen = get_post_meta($post->ID, 'anmerkungen', true);
+        
+        // Default address structure
+        if (!is_array($adresse)) {
+            $adresse = array(
+                'strasse' => '',
+                'plz' => '',
+                'ort' => ''
+            );
+        }
+        
+        ?>
+        <div class="rt-meta-box-container">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                <div>
+                    <label for="anrede"><?php _e('Anrede', 'rt-employee-manager'); ?></label>
+                    <select name="anrede" id="anrede" style="width: 100%;">
+                        <option value=""><?php _e('Bitte wählen', 'rt-employee-manager'); ?></option>
+                        <option value="Herr" <?php selected($anrede, 'Herr'); ?>><?php _e('Herr', 'rt-employee-manager'); ?></option>
+                        <option value="Frau" <?php selected($anrede, 'Frau'); ?>><?php _e('Frau', 'rt-employee-manager'); ?></option>
+                        <option value="Divers" <?php selected($anrede, 'Divers'); ?>><?php _e('Divers', 'rt-employee-manager'); ?></option>
+                    </select>
+                </div>
+                <div>
+                    <label for="vorname"><?php _e('Vorname', 'rt-employee-manager'); ?> *</label>
+                    <input type="text" name="vorname" id="vorname" value="<?php echo esc_attr($vorname); ?>" required style="width: 100%;" />
+                </div>
+                <div>
+                    <label for="nachname"><?php _e('Nachname', 'rt-employee-manager'); ?> *</label>
+                    <input type="text" name="nachname" id="nachname" value="<?php echo esc_attr($nachname); ?>" required style="width: 100%;" />
+                </div>
+            </div>
+            
+            <table class="form-table">
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="sozialversicherungsnummer"><?php _e('Sozialversicherungsnummer', 'rt-employee-manager'); ?> *</label>
+                        <input type="text" name="sozialversicherungsnummer" id="sozialversicherungsnummer" 
+                               value="<?php echo esc_attr($svnr); ?>" maxlength="10" required style="width: 100%;" />
+                        <p class="description"><?php _e('10-stellige Sozialversicherungsnummer ohne Leerzeichen', 'rt-employee-manager'); ?></p>
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="geburtsdatum"><?php _e('Geburtsdatum', 'rt-employee-manager'); ?></label>
+                        <input type="date" name="geburtsdatum" id="geburtsdatum" value="<?php echo esc_attr($geburtsdatum); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="staatsangehoerigkeit"><?php _e('Staatsangehörigkeit', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="staatsangehoerigkeit" id="staatsangehoerigkeit" value="<?php echo esc_attr($staatsangehoerigkeit); ?>" style="width: 100%;" />
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="email"><?php _e('E-Mail-Adresse', 'rt-employee-manager'); ?></label>
+                        <input type="email" name="email" id="email" value="<?php echo esc_attr($email); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+            </table>
+            
+            <h4><?php _e('Adresse', 'rt-employee-manager'); ?></h4>
+            <table class="form-table">
+                <tr>
+                    <td colspan="3">
+                        <label for="adresse_strasse"><?php _e('Straße und Hausnummer', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="adresse[strasse]" id="adresse_strasse" 
+                               value="<?php echo esc_attr($adresse['strasse']); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+                <tr>
+                    <td style="width: 30%;">
+                        <label for="adresse_plz"><?php _e('PLZ', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="adresse[plz]" id="adresse_plz" 
+                               value="<?php echo esc_attr($adresse['plz']); ?>" style="width: 100%;" />
+                    </td>
+                    <td style="width: 70%;">
+                        <label for="adresse_ort"><?php _e('Ort', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="adresse[ort]" id="adresse_ort" 
+                               value="<?php echo esc_attr($adresse['ort']); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+            </table>
+            
+            <h4><?php _e('Beschäftigungsdaten', 'rt-employee-manager'); ?></h4>
+            <table class="form-table">
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="personenstand"><?php _e('Personenstand', 'rt-employee-manager'); ?></label>
+                        <select name="personenstand" id="personenstand" style="width: 100%;">
+                            <option value=""><?php _e('Bitte wählen', 'rt-employee-manager'); ?></option>
+                            <option value="Ledig" <?php selected($personenstand, 'Ledig'); ?>><?php _e('Ledig', 'rt-employee-manager'); ?></option>
+                            <option value="Verheiratet" <?php selected($personenstand, 'Verheiratet'); ?>><?php _e('Verheiratet', 'rt-employee-manager'); ?></option>
+                            <option value="Geschieden" <?php selected($personenstand, 'Geschieden'); ?>><?php _e('Geschieden', 'rt-employee-manager'); ?></option>
+                            <option value="Verwitwet" <?php selected($personenstand, 'Verwitwet'); ?>><?php _e('Verwitwet', 'rt-employee-manager'); ?></option>
+                        </select>
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="eintrittsdatum"><?php _e('Eintrittsdatum', 'rt-employee-manager'); ?> *</label>
+                        <input type="date" name="eintrittsdatum" id="eintrittsdatum" value="<?php echo esc_attr($eintrittsdatum); ?>" required style="width: 100%;" />
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="bezeichnung_der_tatigkeit"><?php _e('Bezeichnung der Tätigkeit', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="bezeichnung_der_tatigkeit" id="bezeichnung_der_tatigkeit" 
+                               value="<?php echo esc_attr($bezeichnung_der_tatigkeit); ?>" style="width: 100%;" />
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="art_des_dienstverhaltnisses"><?php _e('Art des Dienstverhältnisses', 'rt-employee-manager'); ?> *</label>
+                        <select name="art_des_dienstverhaltnisses" id="art_des_dienstverhaltnisses" required style="width: 100%;">
+                            <option value=""><?php _e('Bitte wählen', 'rt-employee-manager'); ?></option>
+                            <option value="Angestellter" <?php selected($art_des_dienstverhaltnisses, 'Angestellter'); ?>><?php _e('Angestellter', 'rt-employee-manager'); ?></option>
+                            <option value="Arbeiter/in" <?php selected($art_des_dienstverhaltnisses, 'Arbeiter/in'); ?>><?php _e('Arbeiter/in', 'rt-employee-manager'); ?></option>
+                            <option value="Lehrling" <?php selected($art_des_dienstverhaltnisses, 'Lehrling'); ?>><?php _e('Lehrling', 'rt-employee-manager'); ?></option>
+                        </select>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="arbeitszeit_pro_woche"><?php _e('Arbeitszeit pro Woche (Stunden)', 'rt-employee-manager'); ?></label>
+                        <input type="number" name="arbeitszeit_pro_woche" id="arbeitszeit_pro_woche" 
+                               value="<?php echo esc_attr($arbeitszeit_pro_woche); ?>" min="1" max="60" step="0.5" style="width: 100%;" />
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="gehaltlohn"><?php _e('Gehalt/Lohn (€)', 'rt-employee-manager'); ?></label>
+                        <input type="number" name="gehaltlohn" id="gehaltlohn" 
+                               value="<?php echo esc_attr($gehaltlohn); ?>" min="0" step="0.01" style="width: 100%;" />
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label><?php _e('Gehalt/Lohn: Brutto/Netto', 'rt-employee-manager'); ?></label><br>
+                        <label><input type="radio" name="type" value="Brutto" <?php checked($type, 'Brutto'); ?> /> <?php _e('Brutto', 'rt-employee-manager'); ?></label><br>
+                        <label><input type="radio" name="type" value="Netto" <?php checked($type, 'Netto'); ?> /> <?php _e('Netto', 'rt-employee-manager'); ?></label>
+                    </td>
+                    <td style="width: 50%;">
+                        <label><?php _e('Arbeitstage', 'rt-employee-manager'); ?></label><br>
+                        <?php
+                        $selected_days = is_array($arbeitstagen) ? $arbeitstagen : array();
+                        $days = array(
+                            'Mo' => __('Montag', 'rt-employee-manager'),
+                            'Di' => __('Dienstag', 'rt-employee-manager'),
+                            'Mi' => __('Mittwoch', 'rt-employee-manager'),
+                            'Do' => __('Donnerstag', 'rt-employee-manager'),
+                            'Fr' => __('Freitag', 'rt-employee-manager'),
+                            'Sa' => __('Samstag', 'rt-employee-manager'),
+                            'So' => __('Sonntag', 'rt-employee-manager')
+                        );
+                        foreach ($days as $key => $label): ?>
+                            <label><input type="checkbox" name="arbeitstagen[]" value="<?php echo esc_attr($key); ?>" 
+                                          <?php checked(in_array($key, $selected_days)); ?> /> <?php echo esc_html($label); ?></label>
+                        <?php endforeach; ?>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="employer_id"><?php _e('Zugehöriges Unternehmen', 'rt-employee-manager'); ?></label>
+                        <?php
+                        $current_user = wp_get_current_user();
+                        $is_kunden = in_array('kunden', $current_user->roles);
+                        
+                        if ($is_kunden && !current_user_can('manage_options')): ?>
+                            <input type="hidden" name="employer_id" value="<?php echo esc_attr($current_user->ID); ?>" />
+                            <input type="text" value="<?php echo esc_attr($current_user->display_name); ?>" readonly style="width: 100%;" />
+                            <p class="description"><?php _e('Unternehmen kann nicht geändert werden', 'rt-employee-manager'); ?></p>
+                        <?php else: ?>
+                            <select name="employer_id" id="employer_id" style="width: 100%;">
+                                <option value=""><?php _e('Bitte wählen', 'rt-employee-manager'); ?></option>
+                                <?php
+                                $users = get_users(array('role__in' => array('kunden', 'administrator')));
+                                foreach ($users as $user): ?>
+                                    <option value="<?php echo esc_attr($user->ID); ?>" <?php selected($employer_id, $user->ID); ?>>
+                                        <?php echo esc_html($user->display_name); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        <?php endif; ?>
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="status"><?php _e('Beschäftigungsstatus', 'rt-employee-manager'); ?></label>
+                        <select name="status" id="status" style="width: 100%;">
+                            <option value="active" <?php selected($status, 'active'); ?>><?php _e('Beschäftigt', 'rt-employee-manager'); ?></option>
+                            <option value="inactive" <?php selected($status, 'inactive'); ?>><?php _e('Beurlaubt', 'rt-employee-manager'); ?></option>
+                            <option value="suspended" <?php selected($status, 'suspended'); ?>><?php _e('Suspendiert', 'rt-employee-manager'); ?></option>
+                            <option value="terminated" <?php selected($status, 'terminated'); ?>><?php _e('Ausgeschieden', 'rt-employee-manager'); ?></option>
+                        </select>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td colspan="2">
+                        <label for="anmerkungen"><?php _e('Anmerkungen', 'rt-employee-manager'); ?></label>
+                        <textarea name="anmerkungen" id="anmerkungen" rows="3" style="width: 100%;"><?php echo esc_textarea($anmerkungen); ?></textarea>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        
+        <style>
+        .rt-meta-box-container label {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .rt-meta-box-container input,
+        .rt-meta-box-container select,
+        .rt-meta-box-container textarea {
+            margin-bottom: 10px;
+        }
+        .rt-meta-box-container h4 {
+            margin: 20px 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #ddd;
+        }
+        .rt-meta-box-container .description {
+            font-size: 12px;
+            color: #666;
+            margin-top: -8px;
+            margin-bottom: 10px;
+        }
+        </style>
+        <?php
+    }
+    
+    /**
+     * Company meta box callback
+     */
+    public function company_meta_box_callback($post) {
+        wp_nonce_field('rt_company_meta_box', 'rt_company_meta_box_nonce');
+        
+        // Get existing values
+        $company_name = get_post_meta($post->ID, 'company_name', true);
+        $uid_number = get_post_meta($post->ID, 'uid_number', true);
+        $phone = get_post_meta($post->ID, 'phone', true);
+        $email = get_post_meta($post->ID, 'email', true);
+        $address = get_post_meta($post->ID, 'address', true);
+        $registration_date = get_post_meta($post->ID, 'registration_date', true);
+        $form_entry_id = get_post_meta($post->ID, 'form_entry_id', true);
+        
+        // Default address structure
+        if (!is_array($address)) {
+            $address = array(
+                'street' => '',
+                'postcode' => '',
+                'city' => '',
+                'country' => 'Austria'
+            );
+        }
+        
+        ?>
+        <div class="rt-meta-box-container">
+            <table class="form-table">
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="company_name"><?php _e('Unternehmensname', 'rt-employee-manager'); ?> *</label>
+                        <input type="text" name="company_name" id="company_name" value="<?php echo esc_attr($company_name); ?>" required style="width: 100%;" />
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="uid_number"><?php _e('UID-Nummer', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="uid_number" id="uid_number" value="<?php echo esc_attr($uid_number); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="phone"><?php _e('Telefonnummer', 'rt-employee-manager'); ?></label>
+                        <input type="tel" name="phone" id="phone" value="<?php echo esc_attr($phone); ?>" style="width: 100%;" />
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="email"><?php _e('E-Mail', 'rt-employee-manager'); ?></label>
+                        <input type="email" name="email" id="email" value="<?php echo esc_attr($email); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+            </table>
+            
+            <h4><?php _e('Adresse', 'rt-employee-manager'); ?></h4>
+            <table class="form-table">
+                <tr>
+                    <td colspan="2">
+                        <label for="address_street"><?php _e('Straße und Hausnummer', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="address[street]" id="address_street" 
+                               value="<?php echo esc_attr($address['street']); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+                <tr>
+                    <td style="width: 30%;">
+                        <label for="address_postcode"><?php _e('PLZ', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="address[postcode]" id="address_postcode" 
+                               value="<?php echo esc_attr($address['postcode']); ?>" style="width: 100%;" />
+                    </td>
+                    <td style="width: 70%;">
+                        <label for="address_city"><?php _e('Ort', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="address[city]" id="address_city" 
+                               value="<?php echo esc_attr($address['city']); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <label for="address_country"><?php _e('Land', 'rt-employee-manager'); ?></label>
+                        <input type="text" name="address[country]" id="address_country" 
+                               value="<?php echo esc_attr($address['country']); ?>" style="width: 100%;" />
+                    </td>
+                </tr>
+            </table>
+            
+            <h4><?php _e('Systeminformationen', 'rt-employee-manager'); ?></h4>
+            <table class="form-table">
+                <tr>
+                    <td style="width: 50%;">
+                        <label for="registration_date"><?php _e('Registrierungsdatum', 'rt-employee-manager'); ?></label>
+                        <input type="datetime-local" name="registration_date" id="registration_date" 
+                               value="<?php echo esc_attr($registration_date); ?>" style="width: 100%;" />
+                    </td>
+                    <td style="width: 50%;">
+                        <label for="form_entry_id"><?php _e('Formular Entry ID', 'rt-employee-manager'); ?></label>
+                        <input type="number" name="form_entry_id" id="form_entry_id" 
+                               value="<?php echo esc_attr($form_entry_id); ?>" readonly style="width: 100%;" />
+                        <p class="description"><?php _e('Nur zur Information', 'rt-employee-manager'); ?></p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Save meta box data
+     */
+    public function save_meta_boxes($post_id, $post) {
+        // Skip auto-saves and revisions
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+        
+        // Handle employee meta box
+        if ($post->post_type === 'angestellte' && isset($_POST['rt_employee_meta_box_nonce'])) {
+            if (!wp_verify_nonce($_POST['rt_employee_meta_box_nonce'], 'rt_employee_meta_box')) {
+                return;
+            }
+            
+            if (!current_user_can('edit_post', $post_id)) {
+                return;
+            }
+            
+            $this->save_employee_meta($post_id);
+        }
+        
+        // Handle company meta box
+        if ($post->post_type === 'kunde' && isset($_POST['rt_company_meta_box_nonce'])) {
+            if (!wp_verify_nonce($_POST['rt_company_meta_box_nonce'], 'rt_company_meta_box')) {
+                return;
+            }
+            
+            if (!current_user_can('edit_post', $post_id)) {
+                return;
+            }
+            
+            $this->save_company_meta($post_id);
+        }
+    }
+    
+    /**
+     * Save employee meta data
+     */
+    private function save_employee_meta($post_id) {
+        $fields = array(
+            'anrede', 'vorname', 'nachname', 'sozialversicherungsnummer', 'geburtsdatum',
+            'staatsangehoerigkeit', 'email', 'personenstand', 'eintrittsdatum',
+            'bezeichnung_der_tatigkeit', 'art_des_dienstverhaltnisses', 'arbeitszeit_pro_woche',
+            'gehaltlohn', 'type', 'employer_id', 'status', 'anmerkungen'
+        );
+        
+        foreach ($fields as $field) {
+            if (isset($_POST[$field])) {
+                update_post_meta($post_id, $field, sanitize_text_field($_POST[$field]));
+            }
+        }
+        
+        // Handle address array
+        if (isset($_POST['adresse']) && is_array($_POST['adresse'])) {
+            $address = array_map('sanitize_text_field', $_POST['adresse']);
+            update_post_meta($post_id, 'adresse', $address);
+        }
+        
+        // Handle working days array
+        if (isset($_POST['arbeitstagen']) && is_array($_POST['arbeitstagen'])) {
+            $days = array_map('sanitize_text_field', $_POST['arbeitstagen']);
+            update_post_meta($post_id, 'arbeitstagen', $days);
+        } else {
+            update_post_meta($post_id, 'arbeitstagen', array());
+        }
+        
+        // Update post title with employee name
+        if (isset($_POST['vorname']) && isset($_POST['nachname'])) {
+            $title = sanitize_text_field($_POST['vorname']) . ' ' . sanitize_text_field($_POST['nachname']);
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_title' => $title
+            ));
+        }
+        
+        // Set default employer if empty and user is kunden
+        if (empty($_POST['employer_id']) && is_user_logged_in()) {
+            $current_user = wp_get_current_user();
+            if (in_array('kunden', $current_user->roles)) {
+                update_post_meta($post_id, 'employer_id', $current_user->ID);
+            }
+        }
+        
+        // Clear statistics cache
+        delete_transient('rt_admin_stats');
+        if (!empty($_POST['employer_id'])) {
+            delete_transient('rt_user_stats_' . $_POST['employer_id']);
+        }
+    }
+    
+    /**
+     * Save company meta data
+     */
+    private function save_company_meta($post_id) {
+        $fields = array('company_name', 'uid_number', 'phone', 'email', 'registration_date', 'form_entry_id');
+        
+        foreach ($fields as $field) {
+            if (isset($_POST[$field])) {
+                update_post_meta($post_id, $field, sanitize_text_field($_POST[$field]));
+            }
+        }
+        
+        // Handle address array
+        if (isset($_POST['address']) && is_array($_POST['address'])) {
+            $address = array_map('sanitize_text_field', $_POST['address']);
+            update_post_meta($post_id, 'address', $address);
+        }
+        
+        // Update post title with company name
+        if (isset($_POST['company_name'])) {
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_title' => sanitize_text_field($_POST['company_name'])
+            ));
+        }
+        
+        // Set registration date if not set
+        if (empty($_POST['registration_date'])) {
+            update_post_meta($post_id, 'registration_date', current_time('Y-m-d\TH:i'));
+        }
+    }
+    
+    /**
+     * Enqueue admin scripts
+     */
+    public function enqueue_admin_scripts($hook) {
+        global $post_type;
+        
+        if (in_array($post_type, array('angestellte', 'kunde')) && in_array($hook, array('post.php', 'post-new.php'))) {
+            wp_enqueue_script('jquery');
+        }
+    }
+    
+    /**
+     * Get employee statistics for a user (compatibility with old ACF integration)
+     */
+    public function get_user_employee_stats($user_id) {
+        global $wpdb;
+        
+        $stats = $wpdb->get_row($wpdb->prepare(
+            "SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN COALESCE(pm_status.meta_value, 'active') = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN pm_status.meta_value = 'inactive' THEN 1 ELSE 0 END) as inactive,
+                SUM(CASE WHEN pm_status.meta_value = 'terminated' THEN 1 ELSE 0 END) as terminated
+             FROM {$wpdb->postmeta} pm_employer
+             INNER JOIN {$wpdb->posts} p ON pm_employer.post_id = p.ID
+             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
+             WHERE pm_employer.meta_key = 'employer_id' 
+             AND pm_employer.meta_value = %d
+             AND p.post_type = 'angestellte'
+             AND p.post_status = 'publish'",
+            $user_id
+        ), ARRAY_A);
+        
+        return $stats ?: array('total' => 0, 'active' => 0, 'inactive' => 0, 'terminated' => 0);
+    }
+    
+    /**
+     * Cleanup placeholder data from existing posts
+     */
+    public function cleanup_placeholder_data() {
+        // Only run once
+        if (get_option('rt_placeholder_data_cleaned')) {
+            return;
+        }
+        
+        // Only admins can trigger this
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        
+        global $wpdb;
+        
+        $placeholder_values = array('Max', 'Mustermann', '1234567890', 'Automatisch', 'gespeicherter');
+        
+        foreach ($placeholder_values as $value) {
+            $wpdb->update(
+                $wpdb->postmeta,
+                array('meta_value' => ''),
+                array('meta_value' => $value),
+                array('%s'),
+                array('%s')
+            );
+        }
+        
+        // Mark as cleaned
+        update_option('rt_placeholder_data_cleaned', true);
+        
+        error_log('RT Employee Manager: Cleaned placeholder data from database');
+    }
+}

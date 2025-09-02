@@ -21,8 +21,8 @@ class RT_Employee_Manager_Registration_Admin {
         if (current_user_can('manage_options')) {
             add_submenu_page(
                 'rt-employee-manager',
-                __('Company Registrations', 'rt-employee-manager'),
-                __('Registrations', 'rt-employee-manager'),
+                __('Unternehmensregistrierungen', 'rt-employee-manager'),
+                __('Registrierungen', 'rt-employee-manager'),
                 'manage_options',
                 'rt-employee-manager-registrations',
                 array($this, 'admin_page')
@@ -42,7 +42,7 @@ class RT_Employee_Manager_Registration_Admin {
         $tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'pending';
         ?>
         <div class="wrap">
-            <h1><?php _e('Company Registrations', 'rt-employee-manager'); ?></h1>
+            <h1><?php _e('Unternehmensregistrierungen', 'rt-employee-manager'); ?></h1>
             
             <h2 class="nav-tab-wrapper">
                 <a href="?page=rt-employee-manager-registrations&tab=pending" 

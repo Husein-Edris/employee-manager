@@ -2,7 +2,7 @@
 /**
  * Plugin Name: RT Employee Manager
  * Plugin URI: https://edrishusein.com
- * Description: Professional employee management system with Gravity Forms integration, ACF fields, and Austrian SVNR validation
+ * Description: Professional employee management system with Gravity Forms integration, native WordPress meta boxes, and Austrian SVNR validation
  * Version: 1.0.0
  * Author: Edris Husein
  * Text Domain: rt-employee-manager
@@ -60,6 +60,9 @@ class RT_Employee_Manager {
         // Production safety checks
         add_action('admin_notices', array($this, 'production_safety_notices'));
         
+        // Force menu refresh on every admin load to ensure proper translations
+        add_action('admin_menu', array($this, 'force_menu_translation_refresh'), 999999);
+        
         // Development environment features
         if (defined('WP_ENVIRONMENT_TYPE') && WP_ENVIRONMENT_TYPE === 'local') {
             // Disable Gravity Forms rate limiting for development only
@@ -108,11 +111,6 @@ class RT_Employee_Manager {
             return false;
         }
         
-        // Check for ACF (optional - will work without it)
-        // if (!function_exists('acf')) {
-        //     return false;
-        // }
-        
         // Check for Advanced Post Creation
         if (!class_exists('GF_Advanced_Post_Creation')) {
             return false;
@@ -127,10 +125,6 @@ class RT_Employee_Manager {
         if (!class_exists('GFForms')) {
             $missing[] = 'Gravity Forms';
         }
-        
-        // if (!function_exists('acf')) {
-        //     $missing[] = 'Advanced Custom Fields (ACF)';
-        // }
         
         if (!class_exists('GF_Advanced_Post_Creation')) {
             $missing[] = 'Gravity Forms Advanced Post Creation';
@@ -150,7 +144,7 @@ class RT_Employee_Manager {
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-custom-post-types.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-gravity-forms-integration.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-user-fields.php';
-        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-acf-integration.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-meta-boxes.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-employee-dashboard.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-admin-settings.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-security.php';
@@ -163,12 +157,7 @@ class RT_Employee_Manager {
         new RT_Employee_Manager_Custom_Post_Types();
         new RT_Employee_Manager_Gravity_Forms_Integration();
         new RT_Employee_Manager_User_Fields();
-        
-        // Only load ACF integration if ACF is active
-        if (function_exists('acf')) {
-            new RT_Employee_Manager_ACF_Integration();
-        }
-        
+        new RT_Employee_Manager_Meta_Boxes();
         new RT_Employee_Manager_Employee_Dashboard();
         $GLOBALS['rt_employee_manager_admin_settings'] = new RT_Employee_Manager_Admin_Settings();
         new RT_Employee_Manager_Security();
@@ -219,6 +208,11 @@ class RT_Employee_Manager {
         
         // Force WordPress to rebuild the admin menu on next load
         wp_cache_delete('admin_menu_', 'options');
+        
+        // Clear all menu-related caches
+        global $menu, $submenu;
+        $menu = null;
+        $submenu = null;
     }
     
     /**
@@ -666,6 +660,75 @@ class RT_Employee_Manager {
         
         // Replace the global menu
         $menu = $clean_menu;
+    }
+    
+    /**
+     * Force menu translation refresh to ensure German labels are shown
+     */
+    public function force_menu_translation_refresh() {
+        global $menu, $submenu;
+        
+        if (!is_admin() || !$menu) {
+            return;
+        }
+        
+        // Update post type labels in the menu
+        foreach ($menu as $key => $menu_item) {
+            if (!is_array($menu_item) || !isset($menu_item[2])) {
+                continue;
+            }
+            
+            // Fix Angestellte -> Mitarbeiter
+            if ($menu_item[2] === 'edit.php?post_type=angestellte') {
+                $menu[$key][0] = __('Mitarbeiter', 'rt-employee-manager');
+                $menu[$key][3] = __('Mitarbeiter', 'rt-employee-manager');
+            }
+            
+            // Fix Kunden -> Unternehmen
+            if ($menu_item[2] === 'edit.php?post_type=kunde') {
+                $menu[$key][0] = __('Unternehmen', 'rt-employee-manager');
+                $menu[$key][3] = __('Unternehmen', 'rt-employee-manager');
+            }
+            
+            // Fix Employee Manager title
+            if ($menu_item[2] === 'rt-employee-manager') {
+                $menu[$key][0] = __('Mitarbeiterverwaltung', 'rt-employee-manager');
+                $menu[$key][3] = __('Mitarbeiterverwaltung', 'rt-employee-manager');
+            }
+        }
+        
+        // Update submenu labels
+        if (isset($submenu['rt-employee-manager'])) {
+            foreach ($submenu['rt-employee-manager'] as $key => $submenu_item) {
+                if ($submenu_item[2] === 'rt-employee-manager-registrations') {
+                    $submenu['rt-employee-manager'][$key][0] = __('Registrierungen', 'rt-employee-manager');
+                }
+                if ($submenu_item[2] === 'rt-employee-manager-settings') {
+                    $submenu['rt-employee-manager'][$key][0] = __('Einstellungen', 'rt-employee-manager');
+                }
+                if ($submenu_item[2] === 'rt-employee-manager-logs') {
+                    $submenu['rt-employee-manager'][$key][0] = __('Logs', 'rt-employee-manager');
+                }
+            }
+        }
+        
+        // Update Angestellte submenu
+        if (isset($submenu['edit.php?post_type=angestellte'])) {
+            foreach ($submenu['edit.php?post_type=angestellte'] as $key => $submenu_item) {
+                if (strpos($submenu_item[2], 'post-new.php?post_type=angestellte') !== false) {
+                    $submenu['edit.php?post_type=angestellte'][$key][0] = __('Neuen hinzufügen', 'rt-employee-manager');
+                }
+            }
+        }
+        
+        // Update Kunde submenu
+        if (isset($submenu['edit.php?post_type=kunde'])) {
+            foreach ($submenu['edit.php?post_type=kunde'] as $key => $submenu_item) {
+                if (strpos($submenu_item[2], 'post-new.php?post_type=kunde') !== false) {
+                    $submenu['edit.php?post_type=kunde'][$key][0] = __('Neues hinzufügen', 'rt-employee-manager');
+                }
+            }
+        }
     }
 }
 
