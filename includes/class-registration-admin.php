@@ -47,7 +47,7 @@ class RT_Employee_Manager_Registration_Admin {
             <h2 class="nav-tab-wrapper">
                 <a href="?page=rt-employee-manager-registrations&tab=pending" 
                    class="nav-tab <?php echo $tab === 'pending' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Pending', 'rt-employee-manager'); ?>
+                    <?php _e('Ausstehend', 'rt-employee-manager'); ?>
                     <?php 
                     $pending_count = $this->get_registrations_count('pending');
                     if ($pending_count > 0) {
@@ -57,11 +57,11 @@ class RT_Employee_Manager_Registration_Admin {
                 </a>
                 <a href="?page=rt-employee-manager-registrations&tab=approved" 
                    class="nav-tab <?php echo $tab === 'approved' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Approved', 'rt-employee-manager'); ?>
+                    <?php _e('Genehmigt', 'rt-employee-manager'); ?>
                 </a>
                 <a href="?page=rt-employee-manager-registrations&tab=rejected" 
                    class="nav-tab <?php echo $tab === 'rejected' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Rejected', 'rt-employee-manager'); ?>
+                    <?php _e('Abgelehnt', 'rt-employee-manager'); ?>
                 </a>
             </h2>
             
@@ -104,11 +104,11 @@ class RT_Employee_Manager_Registration_Admin {
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th><?php _e('Company', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Contact', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Email', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Submitted', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Actions', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Eingereicht', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Aktionen', 'rt-employee-manager'); ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -164,7 +164,7 @@ class RT_Employee_Manager_Registration_Admin {
                                     <h4><?php _e('Registration Details', 'rt-employee-manager'); ?></h4>
                                     <div class="detail-columns">
                                         <div class="detail-column">
-                                            <h5><?php _e('Company Information', 'rt-employee-manager'); ?></h5>
+                                            <h5><?php _e('Unternehmensinformationen', 'rt-employee-manager'); ?></h5>
                                             <p><strong><?php _e('Name:', 'rt-employee-manager'); ?></strong> <?php echo esc_html($registration->company_name); ?></p>
                                             <?php if ($registration->uid_number): ?>
                                                 <p><strong><?php _e('UID:', 'rt-employee-manager'); ?></strong> <?php echo esc_html($registration->uid_number); ?></p>
@@ -318,9 +318,9 @@ class RT_Employee_Manager_Registration_Admin {
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th><?php _e('Company', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Contact', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Email', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
                         <th><?php _e('Approved', 'rt-employee-manager'); ?></th>
                         <th><?php _e('Status', 'rt-employee-manager'); ?></th>
                     </tr>
@@ -378,9 +378,9 @@ class RT_Employee_Manager_Registration_Admin {
             <table class="wp-list-table widefat fixed striped">
                 <thead>
                     <tr>
-                        <th><?php _e('Company', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Contact', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Email', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+                        <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
                         <th><?php _e('Rejected', 'rt-employee-manager'); ?></th>
                         <th><?php _e('Reason', 'rt-employee-manager'); ?></th>
                     </tr>
@@ -758,35 +758,35 @@ class RT_Employee_Manager_Registration_Admin {
         $secure_login_url = RT_Employee_Manager_Login_Redirect::generate_secure_login_url($result['user_id'], 72); // 72 hours
         $regular_login_url = wp_login_url();
         
-        $subject = sprintf(__('[%s] Account Approved - Welcome!', 'rt-employee-manager'), get_bloginfo('name'));
+        $subject = sprintf(__('[%s] Konto genehmigt - Willkommen!', 'rt-employee-manager'), get_bloginfo('name'));
         
         if (!empty($result['password'])) {
             // New account with generated password
             $message = sprintf(__('
-Hello %s,
+Hallo %s,
 
-Great news! Your company registration for %s has been approved!
+Großartige Neuigkeiten! Ihre Unternehmensregistrierung für %s wurde genehmigt!
 
-You can access your employee management dashboard immediately using this secure link:
+Sie können sofort auf Ihr Mitarbeiterverwaltungs-Dashboard zugreifen, indem Sie diesen sicheren Link verwenden:
 %s
 
-This secure link is valid for 72 hours. After that, you can log in normally with:
-- Email: %s
-- Password: %s
-- Login URL: %s
+Dieser sichere Link ist 72 Stunden gültig. Danach können Sie sich normal anmelden mit:
+- E-Mail: %s
+- Passwort: %s
+- Anmelde-URL: %s
 
-What you can do next:
-✓ Add your employees to the system
-✓ Manage employee records and status
-✓ Track active and inactive employees
-✓ Update your company information
+Was Sie als nächstes tun können:
+✓ Ihre Mitarbeiter zum System hinzufügen
+✓ Mitarbeiterdatensätze und Status verwalten
+✓ Aktive und inaktive Mitarbeiter verfolgen
+✓ Ihre Unternehmensinformationen aktualisieren
 
-Need help getting started? Reply to this email and we\'ll assist you.
+Benötigen Sie Hilfe beim Einstieg? Antworten Sie auf diese E-Mail und wir helfen Ihnen gerne.
 
-Welcome to %s!
+Willkommen bei %s!
 
 ---
-This email was generated automatically.
+Diese E-Mail wurde automatisch generiert.
 ', 'rt-employee-manager'),
                 $registration->contact_first_name,
                 $registration->company_name,
@@ -799,28 +799,28 @@ This email was generated automatically.
         } else {
             // Existing account, no password needed
             $message = sprintf(__('
-Hello %s,
+Hallo %s,
 
-Great news! Your company registration for %s has been approved!
+Großartige Neuigkeiten! Ihre Unternehmensregistrierung für %s wurde genehmigt!
 
-You can access your employee management dashboard immediately using this secure link:
+Sie können sofort auf Ihr Mitarbeiterverwaltungs-Dashboard zugreifen, indem Sie diesen sicheren Link verwenden:
 %s
 
-This secure link is valid for 72 hours. After that, you can log in normally with your existing credentials at:
+Dieser sichere Link ist 72 Stunden gültig. Danach können Sie sich normal mit Ihren bestehenden Anmeldedaten anmelden unter:
 %s
 
-What you can do next:
-✓ Add your employees to the system
-✓ Manage employee records and status
-✓ Track active and inactive employees
-✓ Update your company information
+Was Sie als nächstes tun können:
+✓ Ihre Mitarbeiter zum System hinzufügen
+✓ Mitarbeiterdatensätze und Status verwalten
+✓ Aktive und inaktive Mitarbeiter verfolgen
+✓ Ihre Unternehmensinformationen aktualisieren
 
-Need help getting started? Reply to this email and we\'ll assist you.
+Benötigen Sie Hilfe beim Einstieg? Antworten Sie auf diese E-Mail und wir helfen Ihnen gerne.
 
-Welcome to %s!
+Willkommen bei %s!
 
 ---
-This email was generated automatically.
+Diese E-Mail wurde automatisch generiert.
 ', 'rt-employee-manager'),
                 $registration->contact_first_name,
                 $registration->company_name,

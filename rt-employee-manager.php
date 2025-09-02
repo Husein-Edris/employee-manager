@@ -60,6 +60,9 @@ class RT_Employee_Manager {
         // Production safety checks
         add_action('admin_notices', array($this, 'production_safety_notices'));
         
+        // Hide WordPress admin notices for kunden users
+        add_action('admin_notices', array($this, 'hide_wp_admin_notices'), 1);
+        
         // Force menu refresh on every admin load to ensure proper translations
         add_action('admin_menu', array($this, 'force_menu_translation_refresh'), 999999);
         
@@ -131,7 +134,7 @@ class RT_Employee_Manager {
         }
         
         if (!empty($missing)) {
-            echo '<div class="notice notice-error"><p>';
+            echo '<div class="notice notice-error rt-employee-error"><p>';
             echo sprintf(
                 __('RT Mitarbeiterverwaltung benötigt die folgenden Plugins: %s', 'rt-employee-manager'),
                 esc_html(implode(', ', $missing))
@@ -257,7 +260,7 @@ class RT_Employee_Manager {
         
         // Show notice for 5 minutes after deactivation
         if ($deactivated_time && (time() - $deactivated_time) < 300) {
-            echo '<div class="notice notice-info is-dismissible">';
+            echo '<div class="notice notice-info is-dismissible rt-employee-info">';
             echo '<p><strong>RT Mitarbeiterverwaltung:</strong> ';
             echo __('Plugin wurde deaktiviert. Benutzerdefinierte Inhaltstypen (Mitarbeiter, Unternehmen) und verwandte Funktionen sind jetzt deaktiviert. Sie müssen möglicherweise die Seite aktualisieren, um Änderungen zu sehen.', 'rt-employee-manager');
             echo '</p></div>';
@@ -314,7 +317,7 @@ class RT_Employee_Manager {
         
         // Display warnings if any
         if (!empty($warnings)) {
-            echo '<div class="notice notice-warning">';
+            echo '<div class="notice notice-warning rt-employee-warning">';
             echo '<p><strong>' . __('RT Mitarbeiterverwaltung - Produktionswarnungen:', 'rt-employee-manager') . '</strong></p>';
             echo '<ul>';
             foreach ($warnings as $warning) {
@@ -726,6 +729,85 @@ class RT_Employee_Manager {
             foreach ($submenu['edit.php?post_type=kunde'] as $key => $submenu_item) {
                 if (strpos($submenu_item[2], 'post-new.php?post_type=kunde') !== false) {
                     $submenu['edit.php?post_type=kunde'][$key][0] = __('Neues hinzufügen', 'rt-employee-manager');
+                }
+            }
+        }
+    }
+    
+    /**
+     * Hide WordPress admin notices for better user experience
+     */
+    public function hide_wp_admin_notices() {
+        global $wp_filter;
+        
+        // Only hide notices for kunden users and on our plugin pages
+        $current_user = wp_get_current_user();
+        $current_screen = get_current_screen();
+        
+        // Hide for kunden users or on our plugin pages
+        $should_hide = false;
+        
+        if (in_array('kunden', $current_user->roles) && !current_user_can('manage_options')) {
+            $should_hide = true;
+        }
+        
+        // Also hide on our plugin admin pages for cleaner interface
+        if ($current_screen && (
+            strpos($current_screen->id, 'rt-employee-manager') !== false ||
+            ($current_screen->post_type && in_array($current_screen->post_type, ['angestellte', 'kunde']))
+        )) {
+            $should_hide = true;
+        }
+        
+        if ($should_hide) {
+            // Remove WordPress core notices
+            remove_action('admin_notices', 'update_nag', 3);
+            remove_action('admin_notices', 'maintenance_nag');
+            remove_action('network_admin_notices', 'update_nag', 3);
+            remove_action('network_admin_notices', 'maintenance_nag');
+            
+            // Remove plugin/theme update notices
+            remove_action('admin_notices', array('WP_Theme_Install_List_Table', 'check_permissions'));
+            
+            // Add CSS to hide remaining notices
+            echo '<style>
+                .notice:not(.rt-employee-notice), 
+                .update-nag, 
+                .updated, 
+                .error:not(.rt-employee-error),
+                .notice-warning:not(.rt-employee-warning),
+                .notice-info:not(.rt-employee-info),
+                .notice-success:not(.rt-employee-success) {
+                    display: none !important;
+                }
+                
+                /* Allow our plugin notices to show */
+                .notice.rt-employee-notice,
+                .error.rt-employee-error,
+                .notice-warning.rt-employee-warning,
+                .notice-info.rt-employee-info,
+                .notice-success.rt-employee-success {
+                    display: block !important;
+                }
+            </style>';
+            
+            // Also remove from the global wp_filter if they exist
+            if (isset($wp_filter['admin_notices'])) {
+                foreach ($wp_filter['admin_notices']->callbacks as $priority => $callbacks) {
+                    foreach ($callbacks as $callback_id => $callback) {
+                        // Skip our own callbacks
+                        if (is_array($callback['function']) && 
+                            isset($callback['function'][0]) && 
+                            $callback['function'][0] === $this) {
+                            continue;
+                        }
+                        
+                        // Remove WordPress core update notices
+                        if (is_string($callback['function']) && 
+                            in_array($callback['function'], ['update_nag', 'maintenance_nag'])) {
+                            unset($wp_filter['admin_notices']->callbacks[$priority][$callback_id]);
+                        }
+                    }
                 }
             }
         }

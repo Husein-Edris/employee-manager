@@ -65,7 +65,7 @@ class RT_Employee_Manager_Login_Redirect {
                     set_transient('rt_welcome_message_' . $user->ID, array(
                         'type' => 'success',
                         'message' => sprintf(
-                            __('Welcome to %s! Your account has been approved and you can now start managing your employees.', 'rt-employee-manager'),
+                            __('Willkommen bei %s! Ihr Konto wurde genehmigt und Sie können nun Ihre Mitarbeiter verwalten.', 'rt-employee-manager'),
                             get_bloginfo('name')
                         )
                     ), 300); // 5 minutes
@@ -96,15 +96,15 @@ class RT_Employee_Manager_Login_Redirect {
         // Show first-time setup guidance
         if (isset($_GET['welcome']) && $_GET['welcome'] === '1' && current_user_can('create_employees')) {
             echo '<div class="notice notice-info">';
-            echo '<h3>' . __('Getting Started', 'rt-employee-manager') . '</h3>';
-            echo '<p>' . __('Welcome to your employee management dashboard! Here you can:', 'rt-employee-manager') . '</p>';
+            echo '<h3>' . __('Erste Schritte', 'rt-employee-manager') . '</h3>';
+            echo '<p>' . __('Willkommen in Ihrer Mitarbeiterverwaltung! Hier können Sie:', 'rt-employee-manager') . '</p>';
             echo '<ul style="margin-left: 20px;">';
-            echo '<li>' . __('Add new employees to your company', 'rt-employee-manager') . '</li>';
-            echo '<li>' . __('View and manage existing employee records', 'rt-employee-manager') . '</li>';
-            echo '<li>' . __('Track active and inactive employees', 'rt-employee-manager') . '</li>';
-            echo '<li>' . __('Update your company information', 'rt-employee-manager') . '</li>';
+            echo '<li>' . __('Neue Mitarbeiter zu Ihrem Unternehmen hinzufügen', 'rt-employee-manager') . '</li>';
+            echo '<li>' . __('Vorhandene Mitarbeiterdatensätze einsehen und verwalten', 'rt-employee-manager') . '</li>';
+            echo '<li>' . __('Aktive und inaktive Mitarbeiter verfolgen', 'rt-employee-manager') . '</li>';
+            echo '<li>' . __('Ihre Unternehmensinformationen aktualisieren', 'rt-employee-manager') . '</li>';
             echo '</ul>';
-            echo '<p><a href="' . esc_url(admin_url('post-new.php?post_type=angestellte')) . '" class="button button-primary">' . __('Add Your First Employee', 'rt-employee-manager') . '</a></p>';
+            echo '<p><a href="' . esc_url(admin_url('post-new.php?post_type=angestellte')) . '" class="button button-primary">' . __('Ihren ersten Mitarbeiter hinzufügen', 'rt-employee-manager') . '</a></p>';
             echo '</div>';
         }
     }
@@ -260,13 +260,13 @@ class RT_Employee_Manager_Login_Redirect {
             
             switch ($error) {
                 case 'invalid_token':
-                    $message = __('Invalid or expired login link. Please request a new one.', 'rt-employee-manager');
+                    $message = __('Ungültiger oder abgelaufener Anmelde-Link. Bitte fordern Sie einen neuen an.', 'rt-employee-manager');
                     break;
                 case 'access_denied':
-                    $message = __('Access denied. You don\'t have permission to view that page.', 'rt-employee-manager');
+                    $message = __('Zugriff verweigert. Sie haben keine Berechtigung, diese Seite anzuzeigen.', 'rt-employee-manager');
                     break;
                 case 'restricted':
-                    $message = __('You can only manage employee records. Other content is restricted.', 'rt-employee-manager');
+                    $message = __('Sie können nur Mitarbeiterdatensätze verwalten. Andere Inhalte sind eingeschränkt.', 'rt-employee-manager');
                     break;
             }
             
