@@ -45,33 +45,33 @@ class RT_Employee_Manager_Registration_Admin
 
         $tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'pending';
 ?>
-        <div class="wrap">
-            <h1><?php _e('Unternehmensregistrierungen', 'rt-employee-manager'); ?></h1>
+<div class="wrap">
+    <h1><?php _e('Unternehmensregistrierungen', 'rt-employee-manager'); ?></h1>
 
-            <h2 class="nav-tab-wrapper">
-                <a href="?page=rt-employee-manager-registrations&tab=pending"
-                    class="nav-tab <?php echo $tab === 'pending' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Ausstehend', 'rt-employee-manager'); ?>
-                    <?php
+    <h2 class="nav-tab-wrapper">
+        <a href="?page=rt-employee-manager-registrations&tab=pending"
+            class="nav-tab <?php echo $tab === 'pending' ? 'nav-tab-active' : ''; ?>">
+            <?php _e('Ausstehend', 'rt-employee-manager'); ?>
+            <?php
                     $pending_count = $this->get_registrations_count('pending');
                     if ($pending_count > 0) {
                         echo '<span class="awaiting-mod">' . $pending_count . '</span>';
                     }
                     ?>
-                </a>
-                <a href="?page=rt-employee-manager-registrations&tab=approved"
-                    class="nav-tab <?php echo $tab === 'approved' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Genehmigt', 'rt-employee-manager'); ?>
-                </a>
-                <a href="?page=rt-employee-manager-registrations&tab=rejected"
-                    class="nav-tab <?php echo $tab === 'rejected' ? 'nav-tab-active' : ''; ?>">
-                    <?php _e('Abgelehnt', 'rt-employee-manager'); ?>
-                </a>
-            </h2>
+        </a>
+        <a href="?page=rt-employee-manager-registrations&tab=approved"
+            class="nav-tab <?php echo $tab === 'approved' ? 'nav-tab-active' : ''; ?>">
+            <?php _e('Genehmigt', 'rt-employee-manager'); ?>
+        </a>
+        <a href="?page=rt-employee-manager-registrations&tab=rejected"
+            class="nav-tab <?php echo $tab === 'rejected' ? 'nav-tab-active' : ''; ?>">
+            <?php _e('Abgelehnt', 'rt-employee-manager'); ?>
+        </a>
+    </h2>
 
-            <div id="registration-messages"></div>
+    <div id="registration-messages"></div>
 
-            <?php
+    <?php
             switch ($tab) {
                 case 'pending':
                     $this->render_pending_registrations();
@@ -84,8 +84,8 @@ class RT_Employee_Manager_Registration_Admin
                     break;
             }
             ?>
-        </div>
-    <?php
+</div>
+<?php
     }
 
     /**
@@ -95,231 +95,232 @@ class RT_Employee_Manager_Registration_Admin
     {
         $registrations = $this->get_registrations('pending');
     ?>
-        <div class="tablenav top">
-            <div class="alignleft actions">
-                <p><?php _e('Review and approve or reject company registration requests.', 'rt-employee-manager'); ?></p>
-            </div>
-        </div>
+<div class="tablenav top">
+    <div class="alignleft actions">
+        <p><?php _e('Unternehmensregistrierungsanfragen prüfen und genehmigen oder ablehnen.', 'rt-employee-manager'); ?>
+        </p>
+    </div>
+</div>
 
-        <?php if (empty($registrations)): ?>
-            <div class="notice notice-info">
-                <p><?php _e('No pending registrations found.', 'rt-employee-manager'); ?></p>
-            </div>
-        <?php else: ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Eingereicht', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Aktionen', 'rt-employee-manager'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($registrations as $registration): ?>
-                        <tr data-registration-id="<?php echo esc_attr($registration->id); ?>">
-                            <td>
-                                <strong><?php echo esc_html($registration->company_name); ?></strong>
-                                <?php if ($registration->uid_number): ?>
-                                    <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
-                                <?php endif; ?>
-                                <?php if ($registration->company_city): ?>
-                                    <br><small><?php echo esc_html($registration->company_city); ?>,
-                                        <?php echo esc_html($registration->company_country); ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
-                                <?php if ($registration->company_phone): ?>
-                                    <br><small><?php echo esc_html($registration->company_phone); ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <strong><?php echo esc_html($registration->company_email); ?></strong>
-                                <?php if ($registration->contact_email !== $registration->company_email): ?>
-                                    <br><small><?php echo esc_html($registration->contact_email); ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php echo wp_date(get_option('date_format') . ' ' . get_option('time_format'), strtotime($registration->submitted_at)); ?>
-                                <br><small><?php echo human_time_diff(strtotime($registration->submitted_at)); ?> ago</small>
-                            </td>
-                            <td>
-                                <div class="registration-actions">
-                                    <button type="button" class="button button-primary approve-registration"
-                                        data-id="<?php echo esc_attr($registration->id); ?>">
-                                        <?php _e('Approve', 'rt-employee-manager'); ?>
-                                    </button>
-                                    <button type="button" class="button reject-registration"
-                                        data-id="<?php echo esc_attr($registration->id); ?>">
-                                        <?php _e('Reject', 'rt-employee-manager'); ?>
-                                    </button>
-                                    <button type="button" class="button view-details"
-                                        data-id="<?php echo esc_attr($registration->id); ?>">
-                                        <?php _e('Details', 'rt-employee-manager'); ?>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- Hidden details row -->
-                        <tr class="registration-details" id="details-<?php echo esc_attr($registration->id); ?>" style="display: none;">
-                            <td colspan="5">
-                                <div class="registration-detail-content">
-                                    <h4><?php _e('Registration Details', 'rt-employee-manager'); ?></h4>
-                                    <div class="detail-columns">
-                                        <div class="detail-column">
-                                            <h5><?php _e('Unternehmensinformationen', 'rt-employee-manager'); ?></h5>
-                                            <p><strong><?php _e('Name:', 'rt-employee-manager'); ?></strong>
-                                                <?php echo esc_html($registration->company_name); ?></p>
-                                            <?php if ($registration->uid_number): ?>
-                                                <p><strong><?php _e('UID:', 'rt-employee-manager'); ?></strong>
-                                                    <?php echo esc_html($registration->uid_number); ?></p>
-                                            <?php endif; ?>
-                                            <p><strong><?php _e('Email:', 'rt-employee-manager'); ?></strong>
-                                                <?php echo esc_html($registration->company_email); ?></p>
-                                            <?php if ($registration->company_phone): ?>
-                                                <p><strong><?php _e('Phone:', 'rt-employee-manager'); ?></strong>
-                                                    <?php echo esc_html($registration->company_phone); ?></p>
-                                            <?php endif; ?>
-                                        </div>
-
-                                        <div class="detail-column">
-                                            <h5><?php _e('Address', 'rt-employee-manager'); ?></h5>
-                                            <?php if ($registration->company_street): ?>
-                                                <p><?php echo esc_html($registration->company_street); ?></p>
-                                            <?php endif; ?>
-                                            <?php if ($registration->company_postcode || $registration->company_city): ?>
-                                                <p><?php echo esc_html($registration->company_postcode . ' ' . $registration->company_city); ?>
-                                                </p>
-                                            <?php endif; ?>
-                                            <?php if ($registration->company_country): ?>
-                                                <p><?php echo esc_html($registration->company_country); ?></p>
-                                            <?php endif; ?>
-                                        </div>
-
-                                        <div class="detail-column">
-                                            <h5><?php _e('Contact Person', 'rt-employee-manager'); ?></h5>
-                                            <p><strong><?php _e('Name:', 'rt-employee-manager'); ?></strong>
-                                                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
-                                            </p>
-                                            <p><strong><?php _e('Email:', 'rt-employee-manager'); ?></strong>
-                                                <?php echo esc_html($registration->contact_email); ?></p>
-                                        </div>
-
-                                        <div class="detail-column">
-                                            <h5><?php _e('Technical Details', 'rt-employee-manager'); ?></h5>
-                                            <p><strong><?php _e('IP Address:', 'rt-employee-manager'); ?></strong>
-                                                <?php echo esc_html($registration->ip_address); ?></p>
-                                            <p><strong><?php _e('Submitted:', 'rt-employee-manager'); ?></strong>
-                                                <?php echo wp_date(get_option('date_format') . ' ' . get_option('time_format'), strtotime($registration->submitted_at)); ?>
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
-
-        <!-- Rejection Modal -->
-        <div id="rejection-modal" style="display: none;">
-            <div class="rejection-modal-content">
-                <h3><?php _e('Reject Registration', 'rt-employee-manager'); ?></h3>
-                <p><?php _e('Please provide a reason for rejecting this registration:', 'rt-employee-manager'); ?></p>
-                <textarea id="rejection-reason" rows="4" cols="50"
-                    placeholder="<?php esc_attr_e('Reason for rejection...', 'rt-employee-manager'); ?>"></textarea>
-                <div class="modal-actions">
-                    <button type="button" id="confirm-rejection"
-                        class="button button-primary"><?php _e('Reject', 'rt-employee-manager'); ?></button>
-                    <button type="button" id="cancel-rejection"
-                        class="button"><?php _e('Cancel', 'rt-employee-manager'); ?></button>
+<?php if (empty($registrations)): ?>
+<div class="notice notice-info">
+    <p><?php _e('No pending registrations found.', 'rt-employee-manager'); ?></p>
+</div>
+<?php else: ?>
+<table class="wp-list-table widefat fixed striped">
+    <thead>
+        <tr>
+            <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+            <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Eingereicht', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Aktionen', 'rt-employee-manager'); ?></th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($registrations as $registration): ?>
+        <tr data-registration-id="<?php echo esc_attr($registration->id); ?>">
+            <td>
+                <strong><?php echo esc_html($registration->company_name); ?></strong>
+                <?php if ($registration->uid_number): ?>
+                <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
+                <?php endif; ?>
+                <?php if ($registration->company_city): ?>
+                <br><small><?php echo esc_html($registration->company_city); ?>,
+                    <?php echo esc_html($registration->company_country); ?></small>
+                <?php endif; ?>
+            </td>
+            <td>
+                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
+                <?php if ($registration->company_phone): ?>
+                <br><small><?php echo esc_html($registration->company_phone); ?></small>
+                <?php endif; ?>
+            </td>
+            <td>
+                <strong><?php echo esc_html($registration->company_email); ?></strong>
+                <?php if ($registration->contact_email !== $registration->company_email): ?>
+                <br><small><?php echo esc_html($registration->contact_email); ?></small>
+                <?php endif; ?>
+            </td>
+            <td>
+                <?php echo wp_date(get_option('date_format') . ' ' . get_option('time_format'), strtotime($registration->submitted_at)); ?>
+                <br><small><?php echo human_time_diff(strtotime($registration->submitted_at)); ?> ago</small>
+            </td>
+            <td>
+                <div class="registration-actions">
+                    <button type="button" class="button button-primary approve-registration"
+                        data-id="<?php echo esc_attr($registration->id); ?>">
+                        <?php _e('Approve', 'rt-employee-manager'); ?>
+                    </button>
+                    <button type="button" class="button reject-registration"
+                        data-id="<?php echo esc_attr($registration->id); ?>">
+                        <?php _e('Reject', 'rt-employee-manager'); ?>
+                    </button>
+                    <button type="button" class="button view-details"
+                        data-id="<?php echo esc_attr($registration->id); ?>">
+                        <?php _e('Details', 'rt-employee-manager'); ?>
+                    </button>
                 </div>
-            </div>
+            </td>
+        </tr>
+
+        <!-- Hidden details row -->
+        <tr class="registration-details" id="details-<?php echo esc_attr($registration->id); ?>" style="display: none;">
+            <td colspan="5">
+                <div class="registration-detail-content">
+                    <h4><?php _e('Registration Details', 'rt-employee-manager'); ?></h4>
+                    <div class="detail-columns">
+                        <div class="detail-column">
+                            <h5><?php _e('Unternehmensinformationen', 'rt-employee-manager'); ?></h5>
+                            <p><strong><?php _e('Name:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->company_name); ?></p>
+                            <?php if ($registration->uid_number): ?>
+                            <p><strong><?php _e('UID:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->uid_number); ?></p>
+                            <?php endif; ?>
+                            <p><strong><?php _e('Email:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->company_email); ?></p>
+                            <?php if ($registration->company_phone): ?>
+                            <p><strong><?php _e('Phone:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->company_phone); ?></p>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="detail-column">
+                            <h5><?php _e('Address', 'rt-employee-manager'); ?></h5>
+                            <?php if ($registration->company_street): ?>
+                            <p><?php echo esc_html($registration->company_street); ?></p>
+                            <?php endif; ?>
+                            <?php if ($registration->company_postcode || $registration->company_city): ?>
+                            <p><?php echo esc_html($registration->company_postcode . ' ' . $registration->company_city); ?>
+                            </p>
+                            <?php endif; ?>
+                            <?php if ($registration->company_country): ?>
+                            <p><?php echo esc_html($registration->company_country); ?></p>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="detail-column">
+                            <h5><?php _e('Contact Person', 'rt-employee-manager'); ?></h5>
+                            <p><strong><?php _e('Name:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
+                            </p>
+                            <p><strong><?php _e('Email:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->contact_email); ?></p>
+                        </div>
+
+                        <div class="detail-column">
+                            <h5><?php _e('Technical Details', 'rt-employee-manager'); ?></h5>
+                            <p><strong><?php _e('IP Address:', 'rt-employee-manager'); ?></strong>
+                                <?php echo esc_html($registration->ip_address); ?></p>
+                            <p><strong><?php _e('Submitted:', 'rt-employee-manager'); ?></strong>
+                                <?php echo wp_date(get_option('date_format') . ' ' . get_option('time_format'), strtotime($registration->submitted_at)); ?>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
+
+<!-- Rejection Modal -->
+<div id="rejection-modal" style="display: none;">
+    <div class="rejection-modal-content">
+        <h3><?php _e('Reject Registration', 'rt-employee-manager'); ?></h3>
+        <p><?php _e('Please provide a reason for rejecting this registration:', 'rt-employee-manager'); ?></p>
+        <textarea id="rejection-reason" rows="4" cols="50"
+            placeholder="<?php esc_attr_e('Reason for rejection...', 'rt-employee-manager'); ?>"></textarea>
+        <div class="modal-actions">
+            <button type="button" id="confirm-rejection"
+                class="button button-primary"><?php _e('Reject', 'rt-employee-manager'); ?></button>
+            <button type="button" id="cancel-rejection"
+                class="button"><?php _e('Cancel', 'rt-employee-manager'); ?></button>
         </div>
+    </div>
+</div>
 
-        <style>
-            .registration-actions {
-                display: flex;
-                gap: 5px;
-                flex-wrap: wrap;
-            }
+<style>
+.registration-actions {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
 
-            .registration-actions .button {
-                margin-bottom: 5px;
-            }
+.registration-actions .button {
+    margin-bottom: 5px;
+}
 
-            .registration-detail-content {
-                background: #f9f9f9;
-                padding: 15px;
-                border-radius: 5px;
-                margin: 10px 0;
-            }
+.registration-detail-content {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 5px;
+    margin: 10px 0;
+}
 
-            .detail-columns {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 20px;
-                margin-top: 15px;
-            }
+.detail-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
 
-            .detail-column h5 {
-                margin-bottom: 10px;
-                color: #0073aa;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 5px;
-            }
+.detail-column h5 {
+    margin-bottom: 10px;
+    color: #0073aa;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
 
-            .detail-column p {
-                margin: 5px 0;
-            }
+.detail-column p {
+    margin: 5px 0;
+}
 
-            #rejection-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 100000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
+#rejection-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
-            .rejection-modal-content {
-                background: white;
-                padding: 20px;
-                border-radius: 5px;
-                max-width: 500px;
-                width: 90%;
-            }
+.rejection-modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    max-width: 500px;
+    width: 90%;
+}
 
-            .modal-actions {
-                margin-top: 15px;
-                display: flex;
-                gap: 10px;
-                justify-content: flex-end;
-            }
+.modal-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
 
-            #rejection-reason {
-                width: 100%;
-                margin: 10px 0;
-            }
+#rejection-reason {
+    width: 100%;
+    margin: 10px 0;
+}
 
-            .awaiting-mod {
-                background: #d54e21;
-                color: white;
-                border-radius: 10px;
-                padding: 2px 6px;
-                font-size: 11px;
-                margin-left: 5px;
-            }
-        </style>
-    <?php
+.awaiting-mod {
+    background: #d54e21;
+    color: white;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 11px;
+    margin-left: 5px;
+}
+</style>
+<?php
     }
 
     /**
@@ -329,58 +330,58 @@ class RT_Employee_Manager_Registration_Admin
     {
         $registrations = $this->get_registrations('approved');
     ?>
-        <p><?php _e('Unternehmen, die genehmigt wurden und aktive Konten haben.', 'rt-employee-manager'); ?></p>
+<p><?php _e('Unternehmen, die genehmigt wurden und aktive Konten haben.', 'rt-employee-manager'); ?></p>
 
-        <?php if (empty($registrations)): ?>
-            <div class="notice notice-info">
-                <p><?php _e('No approved registrations found.', 'rt-employee-manager'); ?></p>
-            </div>
-        <?php else: ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Approved', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Status', 'rt-employee-manager'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($registrations as $registration): ?>
-                        <tr>
-                            <td>
-                                <strong><?php echo esc_html($registration->company_name); ?></strong>
-                                <?php if ($registration->uid_number): ?>
-                                    <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
-                            </td>
-                            <td>
-                                <?php echo esc_html($registration->company_email); ?>
-                            </td>
-                            <td>
-                                <?php echo wp_date(get_option('date_format'), strtotime($registration->approved_at)); ?>
-                                <br><small><?php echo human_time_diff(strtotime($registration->approved_at)); ?> ago</small>
-                            </td>
-                            <td>
-                                <span class="status-approved"><?php _e('Active', 'rt-employee-manager'); ?></span>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
+<?php if (empty($registrations)): ?>
+<div class="notice notice-info">
+    <p><?php _e('No approved registrations found.', 'rt-employee-manager'); ?></p>
+</div>
+<?php else: ?>
+<table class="wp-list-table widefat fixed striped">
+    <thead>
+        <tr>
+            <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+            <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Approved', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Status', 'rt-employee-manager'); ?></th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($registrations as $registration): ?>
+        <tr>
+            <td>
+                <strong><?php echo esc_html($registration->company_name); ?></strong>
+                <?php if ($registration->uid_number): ?>
+                <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
+                <?php endif; ?>
+            </td>
+            <td>
+                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
+            </td>
+            <td>
+                <?php echo esc_html($registration->company_email); ?>
+            </td>
+            <td>
+                <?php echo wp_date(get_option('date_format'), strtotime($registration->approved_at)); ?>
+                <br><small><?php echo human_time_diff(strtotime($registration->approved_at)); ?> ago</small>
+            </td>
+            <td>
+                <span class="status-approved"><?php _e('Active', 'rt-employee-manager'); ?></span>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
 
-        <style>
-            .status-approved {
-                color: #00a32a;
-                font-weight: bold;
-            }
-        </style>
-    <?php
+<style>
+.status-approved {
+    color: #00a32a;
+    font-weight: bold;
+}
+</style>
+<?php
     }
 
     /**
@@ -390,50 +391,50 @@ class RT_Employee_Manager_Registration_Admin
     {
         $registrations = $this->get_registrations('rejected');
     ?>
-        <p><?php _e('Companies that have been rejected.', 'rt-employee-manager'); ?></p>
+<p><?php _e('Unternehmen, die abgelehnt wurden.', 'rt-employee-manager'); ?></p>
 
-        <?php if (empty($registrations)): ?>
-            <div class="notice notice-info">
-                <p><?php _e('No rejected registrations found.', 'rt-employee-manager'); ?></p>
-            </div>
-        <?php else: ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                    <tr>
-                        <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Rejected', 'rt-employee-manager'); ?></th>
-                        <th><?php _e('Reason', 'rt-employee-manager'); ?></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($registrations as $registration): ?>
-                        <tr>
-                            <td>
-                                <strong><?php echo esc_html($registration->company_name); ?></strong>
-                                <?php if ($registration->uid_number): ?>
-                                    <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
-                            </td>
-                            <td>
-                                <?php echo esc_html($registration->company_email); ?>
-                            </td>
-                            <td>
-                                <?php echo wp_date(get_option('date_format'), strtotime($registration->approved_at)); ?>
-                                <br><small><?php echo human_time_diff(strtotime($registration->approved_at)); ?> ago</small>
-                            </td>
-                            <td>
-                                <?php echo $registration->rejection_reason ? esc_html($registration->rejection_reason) : '<em>' . __('No reason provided', 'rt-employee-manager') . '</em>'; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
+<?php if (empty($registrations)): ?>
+<div class="notice notice-info">
+    <p><?php _e('No rejected registrations found.', 'rt-employee-manager'); ?></p>
+</div>
+<?php else: ?>
+<table class="wp-list-table widefat fixed striped">
+    <thead>
+        <tr>
+            <th><?php _e('Unternehmen', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Kontakt', 'rt-employee-manager'); ?></th>
+            <th><?php _e('E-Mail', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Rejected', 'rt-employee-manager'); ?></th>
+            <th><?php _e('Reason', 'rt-employee-manager'); ?></th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($registrations as $registration): ?>
+        <tr>
+            <td>
+                <strong><?php echo esc_html($registration->company_name); ?></strong>
+                <?php if ($registration->uid_number): ?>
+                <br><small>UID: <?php echo esc_html($registration->uid_number); ?></small>
+                <?php endif; ?>
+            </td>
+            <td>
+                <?php echo esc_html($registration->contact_first_name . ' ' . $registration->contact_last_name); ?>
+            </td>
+            <td>
+                <?php echo esc_html($registration->company_email); ?>
+            </td>
+            <td>
+                <?php echo wp_date(get_option('date_format'), strtotime($registration->approved_at)); ?>
+                <br><small><?php echo human_time_diff(strtotime($registration->approved_at)); ?> ago</small>
+            </td>
+            <td>
+                <?php echo $registration->rejection_reason ? esc_html($registration->rejection_reason) : '<em>' . __('No reason provided', 'rt-employee-manager') . '</em>'; ?>
+            </td>
+        </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
 <?php
     }
 
