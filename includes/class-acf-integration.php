@@ -70,8 +70,8 @@ class RT_Employee_Manager_ACF_Integration
                     'label' => __('Sozialversicherungsnummer', 'rt-employee-manager'),
                     'name' => 'sozialversicherungsnummer',
                     'type' => 'text',
-                    'required' => 1,
-                    'instructions' => __('Bitte die 10-stellige Sozialversicherungsnummer ohne Leerzeichen eingeben', 'rt-employee-manager'),
+                    'required' => 0,
+                    'instructions' => __('Optional: 10-stellige Sozialversicherungsnummer ohne Leerzeichen', 'rt-employee-manager'),
                     'wrapper' => array('width' => '50'),
                     'maxlength' => 10
                 ),

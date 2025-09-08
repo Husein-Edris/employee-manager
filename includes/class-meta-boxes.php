@@ -127,10 +127,10 @@ class RT_Employee_Manager_Meta_Boxes {
                 
                 <tr>
                     <td style="width: 50%;">
-                        <label for="sozialversicherungsnummer"><?php _e('Sozialversicherungsnummer', 'rt-employee-manager'); ?> *</label>
+                        <label for="sozialversicherungsnummer"><?php _e('Sozialversicherungsnummer', 'rt-employee-manager'); ?></label>
                         <input type="text" name="sozialversicherungsnummer" id="sozialversicherungsnummer" 
-                               value="<?php echo esc_attr($svnr); ?>" maxlength="10" required style="width: 100%;" />
-                        <p class="description"><?php _e('10-stellige Sozialversicherungsnummer ohne Leerzeichen', 'rt-employee-manager'); ?></p>
+                               value="<?php echo esc_attr($svnr); ?>" maxlength="10" style="width: 100%;" placeholder="Optional: 10-stellige Nummer" />
+                        <p class="description"><?php _e('Optional: 10-stellige Sozialversicherungsnummer ohne Leerzeichen', 'rt-employee-manager'); ?></p>
                     </td>
                     <td style="width: 50%;">
                         <label for="geburtsdatum"><?php _e('Geburtsdatum', 'rt-employee-manager'); ?></label>

@@ -10,8 +10,8 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         // Field pre-population for employer data
         add_filter('gform_field_value', array($this, 'populate_employer_fields'), 10, 3);
         
-        // SVNR validation
-        add_filter('gform_field_validation', array($this, 'validate_svnr'), 10, 4);
+        // SVNR validation - currently disabled
+        // add_filter('gform_field_validation', array($this, 'validate_svnr'), 10, 4);
         
         // Track employee post creation
         add_action('gform_after_submission', array($this, 'track_employee_creation'), 10, 2);
@@ -228,12 +228,8 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
                     'key' => 'nachname',
                     'value' => rgar($entry, '27'),
                     'compare' => '='
-                ),
-                array(
-                    'key' => 'sozialversicherungsnummer',
-                    'value' => preg_replace('/\D/', '', rgar($entry, '53')),
-                    'compare' => '='
                 )
+                // SVNR check removed - no longer required
             )
         ));
         
@@ -266,10 +262,15 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         $required_fields = array(
             'vorname' => rgar($entry, '28'),
             'nachname' => rgar($entry, '27'),
-            'sozialversicherungsnummer' => preg_replace('/\D/', '', rgar($entry, '53')),
             'employer_id' => rgar($entry, 'created_by') ?: get_current_user_id(),
             'status' => 'active'
         );
+        
+        // Add SVNR if provided (optional now)
+        $svnr = preg_replace('/\D/', '', rgar($entry, '53'));
+        if (!empty($svnr)) {
+            $required_fields['sozialversicherungsnummer'] = $svnr;
+        }
         
         $missing_fields = array();
         
