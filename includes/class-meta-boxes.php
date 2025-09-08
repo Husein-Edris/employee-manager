@@ -53,12 +53,26 @@ class RT_Employee_Manager_Meta_Boxes {
         $staatsangehoerigkeit = get_post_meta($post->ID, 'staatsangehoerigkeit', true);
         $email = get_post_meta($post->ID, 'email', true);
         
-        // Clean placeholder data
-        $placeholder_values = array('Max', 'Mustermann', '1234567890', 'Automatisch', 'gespeicherter');
-        if (in_array($vorname, $placeholder_values)) $vorname = '';
-        if (in_array($nachname, $placeholder_values)) $nachname = '';
-        if (in_array($svnr, $placeholder_values)) $svnr = '';
-        if (in_array($staatsangehoerigkeit, $placeholder_values)) $staatsangehoerigkeit = '';
+        // Clean placeholder data - only remove obviously fake/test data
+        $placeholder_patterns = array('test', 'placeholder', 'example', 'dummy', 'sample');
+        $obvious_test_values = array('123456789', '0000000000', '1111111111');
+        
+        // Only clean if it's obviously test data (contains test patterns or obvious fake values)
+        $vorname_lower = strtolower($vorname);
+        $nachname_lower = strtolower($nachname);
+        
+        foreach ($placeholder_patterns as $pattern) {
+            if (strpos($vorname_lower, $pattern) !== false) $vorname = '';
+            if (strpos($nachname_lower, $pattern) !== false) $nachname = '';
+        }
+        
+        // Clean obvious fake SVNR values
+        if (in_array($svnr, $obvious_test_values)) $svnr = '';
+        
+        // Clean obviously fake nationality
+        if (in_array(strtolower($staatsangehoerigkeit), array('automatisch', 'gespeicherter', 'test', 'placeholder'))) {
+            $staatsangehoerigkeit = '';
+        }
         $adresse = get_post_meta($post->ID, 'adresse', true);
         $personenstand = get_post_meta($post->ID, 'personenstand', true);
         $eintrittsdatum = get_post_meta($post->ID, 'eintrittsdatum', true);
@@ -313,6 +327,14 @@ class RT_Employee_Manager_Meta_Boxes {
         $registration_date = get_post_meta($post->ID, 'registration_date', true);
         $form_entry_id = get_post_meta($post->ID, 'form_entry_id', true);
         
+        // Sync address data from user meta if missing
+        $user_id = get_post_meta($post->ID, 'user_id', true);
+        if ($user_id && (empty($address) || !is_array($address))) {
+            $this->sync_user_meta_to_company_post($post->ID, $user_id);
+            // Re-fetch the address after sync
+            $address = get_post_meta($post->ID, 'address', true);
+        }
+        
         // Default address structure
         if (!is_array($address)) {
             $address = array(
@@ -408,6 +430,12 @@ class RT_Employee_Manager_Meta_Boxes {
             return;
         }
         
+        // Debug logging
+        if (get_option('rt_employee_manager_enable_logging')) {
+            error_log('RT Employee Manager: Saving meta boxes for post ' . $post_id . ', type: ' . $post->post_type);
+            error_log('RT Employee Manager: POST data: ' . print_r($_POST, true));
+        }
+        
         // Handle employee meta box
         if ($post->post_type === 'angestellte' && isset($_POST['rt_employee_meta_box_nonce'])) {
             if (!wp_verify_nonce($_POST['rt_employee_meta_box_nonce'], 'rt_employee_meta_box')) {
@@ -466,13 +494,37 @@ class RT_Employee_Manager_Meta_Boxes {
             update_post_meta($post_id, 'arbeitstagen', array());
         }
         
-        // Update post title with employee name
+        // Update post title with employee name and ensure it's published
         if (isset($_POST['vorname']) && isset($_POST['nachname'])) {
             $title = sanitize_text_field($_POST['vorname']) . ' ' . sanitize_text_field($_POST['nachname']);
+            
+            // Get current post status
+            $current_post = get_post($post_id);
+            $post_status = $current_post->post_status;
+            
+            // If user clicked "Publish" or "Update", make sure it's published
+            if (isset($_POST['publish']) || isset($_POST['save']) || $post_status === 'publish') {
+                $post_status = 'publish';
+            }
+            
             wp_update_post(array(
                 'ID' => $post_id,
-                'post_title' => $title
+                'post_title' => $title,
+                'post_status' => $post_status
             ));
+        }
+        
+        // Set default status if not set
+        if (!get_post_meta($post_id, 'status', true)) {
+            update_post_meta($post_id, 'status', 'active');
+        }
+        
+        // Set employer_id to current user if not set (for kunden users)
+        if (!get_post_meta($post_id, 'employer_id', true)) {
+            $current_user = wp_get_current_user();
+            if (in_array('kunden', $current_user->roles)) {
+                update_post_meta($post_id, 'employer_id', $current_user->ID);
+            }
         }
         
         // Set default employer if empty and user is kunden
@@ -590,5 +642,44 @@ class RT_Employee_Manager_Meta_Boxes {
         update_option('rt_placeholder_data_cleaned', true);
         
         error_log('RT Employee Manager: Cleaned placeholder data from database');
+    }
+    
+    /**
+     * Sync user meta data to company post meta
+     */
+    private function sync_user_meta_to_company_post($post_id, $user_id) {
+        // Get address data from user meta
+        $address_street = get_user_meta($user_id, 'address_street', true);
+        $address_postcode = get_user_meta($user_id, 'address_postcode', true);
+        $address_city = get_user_meta($user_id, 'address_city', true);
+        $address_country = get_user_meta($user_id, 'address_country', true);
+        
+        // Create address array for post meta
+        if (!empty($address_street) || !empty($address_city) || !empty($address_postcode)) {
+            $address_array = array(
+                'street' => $address_street,
+                'postcode' => $address_postcode,
+                'city' => $address_city,
+                'country' => $address_country
+            );
+            update_post_meta($post_id, 'address', $address_array);
+        }
+        
+        // Also sync other company data if missing
+        $company_data_mapping = array(
+            'company_name' => 'company_name',
+            'uid_number' => 'uid_number',
+            'phone' => 'phone'
+        );
+        
+        foreach ($company_data_mapping as $post_meta_key => $user_meta_key) {
+            $existing_value = get_post_meta($post_id, $post_meta_key, true);
+            if (empty($existing_value)) {
+                $user_value = get_user_meta($user_id, $user_meta_key, true);
+                if (!empty($user_value)) {
+                    update_post_meta($post_id, $post_meta_key, $user_value);
+                }
+            }
+        }
     }
 }

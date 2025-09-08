@@ -31,6 +31,12 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         
         // User registration integration
         add_action('gform_user_registered', array($this, 'after_user_registration'), 10, 4);
+        
+        // Advanced Post Creation integration
+        add_action('gform_advancedpostcreation_post_after_creation', array($this, 'after_employee_post_creation'), 10, 4);
+        
+        // Alternative hook for when APC creates posts
+        add_action('gform_after_submission', array($this, 'ensure_employee_post_data'), 20, 2);
     }
     
     /**
@@ -86,10 +92,25 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
             }
             
             // Checksum validation using Austrian algorithm
-            if (!$this->validate_svnr_checksum($cleaned)) {
-                $result['is_valid'] = false;
-                $result['message'] = __('Ungültige Sozialversicherungsnummer.', 'rt-employee-manager');
-                return $result;
+            // Skip validation in local development environment
+            if (defined('WP_ENVIRONMENT_TYPE') && WP_ENVIRONMENT_TYPE === 'local') {
+                // In local development, only check basic format
+                if (get_option('rt_employee_manager_enable_logging')) {
+                    error_log('RT Employee Manager: SVNR validation skipped in local environment: ' . $cleaned);
+                }
+            } else {
+                // Full validation in production
+                if (!$this->validate_svnr_checksum($cleaned)) {
+                    $result['is_valid'] = false;
+                    $result['message'] = __('Ungültige Sozialversicherungsnummer. Format: 10 Ziffern (z.B. 1237010180)', 'rt-employee-manager');
+                    
+                    // Debug logging
+                    if (get_option('rt_employee_manager_enable_logging')) {
+                        error_log('RT Employee Manager: SVNR validation failed for: ' . $cleaned);
+                    }
+                    
+                    return $result;
+                }
             }
             
             // Check for duplicates
@@ -440,6 +461,158 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         if (get_option('rt_employee_manager_enable_logging')) {
             error_log('RT Employee Manager [DEBUG]: ' . $message . ' - ' . print_r($data, true));
         }
+    }
+    
+    /**
+     * Handle employee post after Advanced Post Creation creates it
+     */
+    public function after_employee_post_creation($post_id, $feed, $entry, $form) {
+        // Only handle employee form
+        if ($form['id'] != 1) {
+            return;
+        }
+        
+        $this->log_debug('Advanced Post Creation created employee post', array(
+            'post_id' => $post_id,
+            'entry_id' => $entry['id']
+        ));
+        
+        // Ensure post is published
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_status' => 'publish'
+        ));
+        
+        // Save additional employee data
+        $this->save_employee_post_data($post_id, $entry);
+        
+        $this->log_success('Employee post updated after APC creation', array(
+            'post_id' => $post_id,
+            'entry_id' => $entry['id']
+        ));
+    }
+    
+    /**
+     * Ensure employee post data is saved (alternative method)
+     */
+    public function ensure_employee_post_data($entry, $form) {
+        // Only handle employee form
+        if ($form['id'] != 1) {
+            return;
+        }
+        
+        // Look for recently created employee posts that might need updating
+        $recent_posts = get_posts(array(
+            'post_type' => 'angestellte',
+            'posts_per_page' => 5,
+            'orderby' => 'date',
+            'order' => 'DESC',
+            'date_query' => array(
+                'after' => '5 minutes ago'
+            )
+        ));
+        
+        foreach ($recent_posts as $post) {
+            // Check if this post needs data (has minimal meta)
+            $existing_meta = get_post_meta($post->ID);
+            $has_employee_data = isset($existing_meta['first_name']) || 
+                               isset($existing_meta['last_name']) || 
+                               isset($existing_meta['svnr']);
+            
+            if (!$has_employee_data) {
+                $this->log_debug('Found employee post without data, updating', array(
+                    'post_id' => $post->ID,
+                    'entry_id' => $entry['id']
+                ));
+                
+                // Update post status
+                if ($post->post_status === 'draft') {
+                    wp_update_post(array(
+                        'ID' => $post->ID,
+                        'post_status' => 'publish'
+                    ));
+                }
+                
+                // Save employee data
+                $this->save_employee_post_data($post->ID, $entry);
+                break; // Only update the first matching post
+            }
+        }
+    }
+    
+    /**
+     * Save employee data to post meta
+     */
+    private function save_employee_post_data($post_id, $entry) {
+        // Get current user (employer)
+        $employer_id = is_user_logged_in() ? get_current_user_id() : null;
+        
+        // Field mapping for employee data (using German field names to match meta boxes)
+        $field_mapping = array(
+            'vorname' => rgar($entry, '28'),         // First name (Vorname)
+            'nachname' => rgar($entry, '27'),       // Last name (Nachname)
+            'sozialversicherungsnummer' => rgar($entry, '53'), // SVNR
+            'email' => rgar($entry, '26'),           // Email
+            'telefon' => rgar($entry, '25'),         // Phone
+            'geburtsdatum' => rgar($entry, '29'),    // Birth date
+            'eintrittsdatum' => rgar($entry, '30'),  // Hire date
+            'bezeichnung_der_tatigkeit' => rgar($entry, '31'), // Position
+            'abteilung' => rgar($entry, '32'),       // Department
+            'gehaltlohn' => rgar($entry, '33'),      // Salary
+            'art_des_dienstverhaltnisses' => rgar($entry, '34'), // Employment type
+            'staatsangehoerigkeit' => rgar($entry, '38'), // Nationality
+            'personenstand' => rgar($entry, '39'),   // Marital status
+            'arbeitszeit_pro_woche' => rgar($entry, '40'), // Working hours per week
+            'anmerkungen' => rgar($entry, '37')      // Notes
+        );
+        
+        // Handle address as array structure (as expected by meta box)
+        $address_street = rgar($entry, '35.1');
+        $address_city = rgar($entry, '35.3');
+        $address_postcode = rgar($entry, '35.5');
+        $address_country = rgar($entry, '35.6');
+        
+        if (!empty($address_street) || !empty($address_city) || !empty($address_postcode)) {
+            $address_array = array(
+                'strasse' => $address_street,
+                'plz' => $address_postcode,
+                'ort' => $address_city,
+                'land' => $address_country
+            );
+            update_post_meta($post_id, 'adresse', $address_array);
+        }
+        
+        // Save employer relationship
+        if ($employer_id) {
+            update_post_meta($post_id, 'employer_id', $employer_id);
+        }
+        
+        // Set default status
+        update_post_meta($post_id, 'status', 'active');
+        
+        // Save all employee data
+        foreach ($field_mapping as $meta_key => $value) {
+            if (!empty($value)) {
+                update_post_meta($post_id, $meta_key, sanitize_text_field($value));
+            }
+        }
+        
+        // Update post title with employee name
+        $vorname = rgar($entry, '28');
+        $nachname = rgar($entry, '27');
+        if (!empty($vorname) || !empty($nachname)) {
+            $full_name = trim($vorname . ' ' . $nachname);
+            wp_update_post(array(
+                'ID' => $post_id,
+                'post_title' => $full_name
+            ));
+        }
+        
+        $this->log_success('Employee post data saved', array(
+            'post_id' => $post_id,
+            'employer_id' => $employer_id,
+            'employee_name' => $vorname . ' ' . $nachname
+        ));
     }
     
     private function log_error($message, $data = array()) {

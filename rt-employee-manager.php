@@ -170,11 +170,15 @@ class RT_Employee_Manager {
     }
     
     public function activate() {
-        // Load includes first
-        $this->load_includes();
+        // Load includes first - check if files exist before including
+        if (file_exists(RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-custom-post-types.php')) {
+            require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-custom-post-types.php';
+        }
         
-        // Create custom post types
-        RT_Employee_Manager_Custom_Post_Types::register_post_types();
+        // Initialize custom post types class and register
+        if (class_exists('RT_Employee_Manager_Custom_Post_Types')) {
+            RT_Employee_Manager_Custom_Post_Types::register_post_types();
+        }
         
         // Flush rewrite rules
         flush_rewrite_rules();

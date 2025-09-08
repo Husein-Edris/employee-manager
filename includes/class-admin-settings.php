@@ -228,13 +228,6 @@ class RT_Employee_Manager_Admin_Settings {
                             <a href="<?php echo admin_url('admin.php?page=rt-employee-manager-settings'); ?>" class="button button-secondary">
                                 <?php _e('Einstellungen', 'rt-employee-manager'); ?>
                             </a>
-                            <form method="post" action="" style="display: inline;">
-                                <?php wp_nonce_field('rt_refresh_menu', 'rt_refresh_menu_nonce'); ?>
-                                <input type="hidden" name="rt_action" value="refresh_menu">
-                                <button type="submit" class="button button-secondary">
-                                    <?php _e('Menü & Cache leeren', 'rt-employee-manager'); ?>
-                                </button>
-                            </form>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -326,12 +319,26 @@ class RT_Employee_Manager_Admin_Settings {
                                         ?>
                                         <tr>
                                             <td>
-                                                <strong><?php echo esc_html($vorname . ' ' . $nachname); ?></strong>
+                                                <?php
+                                                $employee_name = trim($vorname . ' ' . $nachname);
+                                                if (empty($employee_name)) {
+                                                    $employee_name = $employee->post_title ?: __('Namenlos', 'rt-employee-manager');
+                                                }
+                                                ?>
+                                                <strong><?php echo esc_html($employee_name); ?></strong>
                                             </td>
                                             <td>
                                                 <?php if ($employer): ?>
-                                                    <?php echo esc_html($employer->display_name); ?>
-                                                    <br><small><?php echo esc_html(get_user_meta($employer_id, 'company_name', true)); ?></small>
+                                                    <?php 
+                                                    $company_name = get_user_meta($employer_id, 'company_name', true);
+                                                    if (empty($company_name)) {
+                                                        $company_name = $employer->display_name;
+                                                    }
+                                                    ?>
+                                                    <?php echo esc_html($company_name); ?>
+                                                    <?php if ($company_name !== $employer->display_name): ?>
+                                                        <br><small><?php echo esc_html($employer->display_name); ?></small>
+                                                    <?php endif; ?>
                                                 <?php else: ?>
                                                     <em><?php _e('Unbekannt', 'rt-employee-manager'); ?></em>
                                                 <?php endif; ?>
@@ -542,121 +549,131 @@ class RT_Employee_Manager_Admin_Settings {
         if (isset($_POST['submit'])) {
             check_admin_referer('rt_employee_manager_settings');
             
-            // Save settings
-            $settings = array(
+            // Save checkbox settings (handle unchecked boxes)
+            $checkbox_settings = array(
                 'rt_employee_manager_enable_email_notifications',
-                'rt_employee_manager_admin_email',
-                'rt_employee_manager_employee_form_id',
-                'rt_employee_manager_client_form_id',
                 'rt_employee_manager_enable_logging',
                 'rt_employee_manager_enable_svnr_validation',
-                'rt_employee_manager_max_employees_per_client',
                 'rt_employee_manager_enable_frontend_editing'
             );
             
-            foreach ($settings as $setting) {
+            foreach ($checkbox_settings as $setting) {
+                $value = isset($_POST[$setting]) ? '1' : '0';
+                update_option($setting, $value);
+            }
+            
+            // Save text/number settings
+            $text_settings = array(
+                'rt_employee_manager_admin_email' => 'sanitize_email',
+                'rt_employee_manager_employee_form_id' => 'intval',
+                'rt_employee_manager_client_form_id' => 'intval',
+                'rt_employee_manager_max_employees_per_client' => 'intval'
+            );
+            
+            foreach ($text_settings as $setting => $sanitize_func) {
                 if (isset($_POST[$setting])) {
-                    update_option($setting, sanitize_text_field($_POST[$setting]));
+                    $value = call_user_func($sanitize_func, $_POST[$setting]);
+                    update_option($setting, $value);
                 }
             }
             
-            echo '<div class="notice notice-success"><p>' . __('Einstellungen gespeichert.', 'rt-employee-manager') . '</p></div>';
+            echo '<div class="notice notice-success"><p>Einstellungen erfolgreich gespeichert.</p></div>';
         }
         
         ?>
         <div class="wrap">
-            <h1><?php _e('RT Employee Manager Einstellungen', 'rt-employee-manager'); ?></h1>
+            <h1>RT Employee Manager Einstellungen</h1>
             
             <form method="post" action="">
                 <?php wp_nonce_field('rt_employee_manager_settings'); ?>
                 
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('E-Mail Benachrichtigungen', 'rt-employee-manager'); ?></th>
+                        <th scope="row">E-Mail Benachrichtigungen</th>
                         <td>
                             <label>
                                 <input type="checkbox" name="rt_employee_manager_enable_email_notifications" value="1" 
                                        <?php checked(get_option('rt_employee_manager_enable_email_notifications'), '1'); ?> />
-                                <?php _e('E-Mail Benachrichtigungen aktivieren', 'rt-employee-manager'); ?>
+                                E-Mail Benachrichtigungen aktivieren
                             </label>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('Admin E-Mail', 'rt-employee-manager'); ?></th>
+                        <th scope="row">Admin E-Mail</th>
                         <td>
                             <input type="email" name="rt_employee_manager_admin_email" 
                                    value="<?php echo esc_attr(get_option('rt_employee_manager_admin_email', get_option('admin_email'))); ?>" 
                                    class="regular-text" />
-                            <p class="description"><?php _e('E-Mail Adresse für Benachrichtigungen', 'rt-employee-manager'); ?></p>
+                            <p class="description">E-Mail Adresse für Benachrichtigungen</p>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('Mitarbeiter Formular ID', 'rt-employee-manager'); ?></th>
+                        <th scope="row">Mitarbeiter Formular ID</th>
                         <td>
                             <input type="number" name="rt_employee_manager_employee_form_id" 
                                    value="<?php echo esc_attr(get_option('rt_employee_manager_employee_form_id', '1')); ?>" 
                                    class="small-text" min="1" />
-                            <p class="description"><?php _e('Gravity Forms ID für Mitarbeiter Anmeldung', 'rt-employee-manager'); ?></p>
+                            <p class="description">Gravity Forms ID für Mitarbeiter Anmeldung</p>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('Kunden Formular ID', 'rt-employee-manager'); ?></th>
+                        <th scope="row">Kunden Formular ID</th>
                         <td>
                             <input type="number" name="rt_employee_manager_client_form_id" 
                                    value="<?php echo esc_attr(get_option('rt_employee_manager_client_form_id', '3')); ?>" 
                                    class="small-text" min="1" />
-                            <p class="description"><?php _e('Gravity Forms ID für Kunden Registrierung', 'rt-employee-manager'); ?></p>
+                            <p class="description">Gravity Forms ID für Kunden Registrierung</p>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('Logging', 'rt-employee-manager'); ?></th>
+                        <th scope="row">Debug Logging</th>
                         <td>
                             <label>
                                 <input type="checkbox" name="rt_employee_manager_enable_logging" value="1" 
                                        <?php checked(get_option('rt_employee_manager_enable_logging'), '1'); ?> />
-                                <?php _e('Debug Logging aktivieren', 'rt-employee-manager'); ?>
+                                Debug Logging aktivieren
                             </label>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('SVNR Validierung', 'rt-employee-manager'); ?></th>
+                        <th scope="row">SVNR Validierung</th>
                         <td>
                             <label>
                                 <input type="checkbox" name="rt_employee_manager_enable_svnr_validation" value="1" 
                                        <?php checked(get_option('rt_employee_manager_enable_svnr_validation'), '1'); ?> />
-                                <?php _e('Österreichische SVNR Validierung aktivieren', 'rt-employee-manager'); ?>
+                                Österreichische SVNR Validierung aktivieren
                             </label>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('Max. Mitarbeiter pro Kunde', 'rt-employee-manager'); ?></th>
+                        <th scope="row">Max. Mitarbeiter pro Kunde</th>
                         <td>
                             <input type="number" name="rt_employee_manager_max_employees_per_client" 
                                    value="<?php echo esc_attr(get_option('rt_employee_manager_max_employees_per_client', '50')); ?>" 
                                    class="small-text" min="1" max="1000" />
-                            <p class="description"><?php _e('Standard Maximum für neue Kunden', 'rt-employee-manager'); ?></p>
+                            <p class="description">Standard Maximum für neue Kunden</p>
                         </td>
                     </tr>
                     
                     <tr>
-                        <th scope="row"><?php _e('Frontend Bearbeitung', 'rt-employee-manager'); ?></th>
+                        <th scope="row">Frontend Bearbeitung</th>
                         <td>
                             <label>
                                 <input type="checkbox" name="rt_employee_manager_enable_frontend_editing" value="1" 
                                        <?php checked(get_option('rt_employee_manager_enable_frontend_editing'), '1'); ?> />
-                                <?php _e('Frontend Bearbeitung für Kunden aktivieren', 'rt-employee-manager'); ?>
+                                Frontend Bearbeitung für Kunden aktivieren
                             </label>
                         </td>
                     </tr>
                 </table>
                 
-                <?php submit_button(); ?>
+                <?php submit_button('Einstellungen speichern'); ?>
             </form>
         </div>
         <?php
@@ -1011,26 +1028,6 @@ class RT_Employee_Manager_Admin_Settings {
             });
         }
         
-        // Handle menu refresh
-        if (isset($_POST['rt_action']) && $_POST['rt_action'] === 'refresh_menu') {
-            if (!wp_verify_nonce($_POST['rt_refresh_menu_nonce'], 'rt_refresh_menu')) {
-                wp_die(__('Sicherheitsprüfung fehlgeschlagen', 'rt-employee-manager'));
-            }
-            
-            $this->force_menu_refresh();
-            
-            wp_redirect(add_query_arg('menu_refreshed', '1', admin_url('admin.php?page=rt-employee-manager')));
-            exit;
-        }
-        
-        // Show menu refresh success message
-        if (isset($_GET['menu_refreshed']) && $_GET['menu_refreshed'] === '1') {
-            add_action('admin_notices', function() {
-                echo '<div class="notice notice-success is-dismissible">';
-                echo '<p><strong>' . __('Menü erfolgreich aktualisiert! Bitte laden Sie die Seite neu.', 'rt-employee-manager') . '</strong></p>';
-                echo '</div>';
-            });
-        }
     }
     
     /**
