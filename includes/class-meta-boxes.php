@@ -11,6 +11,10 @@ class RT_Employee_Manager_Meta_Boxes {
         add_action('save_post', array($this, 'save_meta_boxes'), 10, 2);
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('admin_init', array($this, 'cleanup_placeholder_data'));
+        
+        // Additional hooks for better save handling
+        add_action('transition_post_status', array($this, 'handle_post_status_transition'), 10, 3);
+        add_action('wp_insert_post', array($this, 'handle_post_insert'), 10, 2);
     }
     
     /**
@@ -432,23 +436,31 @@ class RT_Employee_Manager_Meta_Boxes {
             return;
         }
         
+        // Skip if this is not our post type
+        if (!in_array($post->post_type, array('angestellte', 'kunde'))) {
+            return;
+        }
+        
         // Debug logging
         if (get_option('rt_employee_manager_enable_logging')) {
             error_log('RT Employee Manager: Saving meta boxes for post ' . $post_id . ', type: ' . $post->post_type);
-            error_log('RT Employee Manager: POST data: ' . print_r($_POST, true));
+            error_log('RT Employee Manager: User can edit: ' . (current_user_can('edit_post', $post_id) ? 'yes' : 'no'));
+            error_log('RT Employee Manager: Nonce present: ' . (isset($_POST['rt_employee_meta_box_nonce']) || isset($_POST['rt_company_meta_box_nonce']) ? 'yes' : 'no'));
         }
         
         // Handle employee meta box
-        if ($post->post_type === 'angestellte' && isset($_POST['rt_employee_meta_box_nonce'])) {
-            if (!wp_verify_nonce($_POST['rt_employee_meta_box_nonce'], 'rt_employee_meta_box')) {
-                return;
-            }
+        if ($post->post_type === 'angestellte') {
+            // Check if nonce is present OR if this is a direct backend save
+            $has_nonce = isset($_POST['rt_employee_meta_box_nonce']) && wp_verify_nonce($_POST['rt_employee_meta_box_nonce'], 'rt_employee_meta_box');
+            $is_backend_save = isset($_POST['post_type']) && $_POST['post_type'] === 'angestellte';
             
-            if (!current_user_can('edit_post', $post_id)) {
-                return;
+            if ($has_nonce || $is_backend_save) {
+                if (!current_user_can('edit_post', $post_id)) {
+                    return;
+                }
+                
+                $this->save_employee_meta($post_id);
             }
-            
-            $this->save_employee_meta($post_id);
         }
         
         // Handle company meta box
@@ -522,23 +534,37 @@ class RT_Employee_Manager_Meta_Boxes {
         }
         
         // Update post title with employee name and ensure it's published
-        if (isset($_POST['vorname']) && isset($_POST['nachname'])) {
-            $title = sanitize_text_field($_POST['vorname']) . ' ' . sanitize_text_field($_POST['nachname']);
+        $vorname_value = isset($_POST['vorname']) ? sanitize_text_field($_POST['vorname']) : '';
+        $nachname_value = isset($_POST['nachname']) ? sanitize_text_field($_POST['nachname']) : '';
+        
+        if (!empty($vorname_value) || !empty($nachname_value)) {
+            $title = trim($vorname_value . ' ' . $nachname_value);
             
-            // Get current post status
-            $current_post = get_post($post_id);
-            $post_status = $current_post->post_status;
-            
-            // If user clicked "Publish" or "Update", make sure it's published
-            if (isset($_POST['publish']) || isset($_POST['save']) || $post_status === 'publish') {
-                $post_status = 'publish';
+            if (!empty($title)) {
+                // Get current post status
+                $current_post = get_post($post_id);
+                $post_status = $current_post->post_status;
+                
+                // Auto-publish if we have data
+                if ($post_status === 'auto-draft' || $post_status === 'draft') {
+                    $post_status = 'publish';
+                }
+                
+                // If user explicitly clicked "Publish" or "Update"
+                if (isset($_POST['publish']) || isset($_POST['save']) || isset($_POST['original_post_status'])) {
+                    $post_status = 'publish';
+                }
+                
+                wp_update_post(array(
+                    'ID' => $post_id,
+                    'post_title' => $title,
+                    'post_status' => $post_status
+                ));
+                
+                if (get_option('rt_employee_manager_enable_logging')) {
+                    error_log("RT Employee Manager: Updated post title to '{$title}' and status to '{$post_status}' for post {$post_id}");
+                }
             }
-            
-            wp_update_post(array(
-                'ID' => $post_id,
-                'post_title' => $title,
-                'post_status' => $post_status
-            ));
         }
         
         // Set default status if not set
@@ -720,6 +746,88 @@ class RT_Employee_Manager_Meta_Boxes {
                 if (!empty($user_value)) {
                     update_post_meta($post_id, $post_meta_key, $user_value);
                 }
+            }
+        }
+    }
+    
+    /**
+     * Handle post status transitions for better save handling
+     */
+    public function handle_post_status_transition($new_status, $old_status, $post) {
+        if ($post->post_type !== 'angestellte') {
+            return;
+        }
+        
+        if (get_option('rt_employee_manager_enable_logging')) {
+            error_log("RT Employee Manager: Post status transition from '{$old_status}' to '{$new_status}' for post {$post->ID}");
+        }
+        
+        // If transitioning to published, ensure meta data is saved
+        if ($new_status === 'publish' && $old_status !== 'publish') {
+            $this->ensure_employee_meta_on_publish($post->ID);
+        }
+    }
+    
+    /**
+     * Handle post insert for new posts
+     */
+    public function handle_post_insert($post_id, $post) {
+        if ($post->post_type !== 'angestellte') {
+            return;
+        }
+        
+        // For new posts, ensure defaults are set
+        if ($post->post_status === 'auto-draft') {
+            return; // Skip auto-drafts
+        }
+        
+        $this->ensure_employee_defaults($post_id);
+    }
+    
+    /**
+     * Ensure employee meta is properly saved when publishing
+     */
+    private function ensure_employee_meta_on_publish($post_id) {
+        // Check if we have basic meta data
+        $vorname = get_post_meta($post_id, 'vorname', true);
+        $nachname = get_post_meta($post_id, 'nachname', true);
+        $employer_id = get_post_meta($post_id, 'employer_id', true);
+        
+        // Set defaults if missing
+        if (empty($employer_id)) {
+            $current_user = wp_get_current_user();
+            if (in_array('kunden', $current_user->roles)) {
+                update_post_meta($post_id, 'employer_id', $current_user->ID);
+            } elseif (current_user_can('manage_options')) {
+                // Get first kunden user as fallback
+                $kunden_users = get_users(array('role' => 'kunden', 'number' => 1));
+                if (!empty($kunden_users)) {
+                    update_post_meta($post_id, 'employer_id', $kunden_users[0]->ID);
+                }
+            }
+        }
+        
+        if (empty(get_post_meta($post_id, 'status', true))) {
+            update_post_meta($post_id, 'status', 'active');
+        }
+        
+        if (get_option('rt_employee_manager_enable_logging')) {
+            error_log("RT Employee Manager: Ensured meta data for published post {$post_id}");
+        }
+    }
+    
+    /**
+     * Ensure employee defaults are set
+     */
+    private function ensure_employee_defaults($post_id) {
+        if (empty(get_post_meta($post_id, 'status', true))) {
+            update_post_meta($post_id, 'status', 'active');
+        }
+        
+        if (empty(get_post_meta($post_id, 'employer_id', true))) {
+            $current_user = wp_get_current_user();
+            if (in_array('kunden', $current_user->roles)) {
+                update_post_meta($post_id, 'employer_id', $current_user->ID);
             }
         }
     }

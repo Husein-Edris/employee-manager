@@ -49,6 +49,13 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         add_filter('gform_validation_message', array($this, 'translate_validation_messages'), 10, 2);
         add_filter('gform_field_validation', array($this, 'translate_field_validation_messages'), 10, 4);
         
+        // Frontend user interface enhancements
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
+        add_action('wp_footer', array($this, 'add_frontend_user_interface'));
+        
+        // Admin interface modifications
+        add_filter('admin_url', array($this, 'redirect_backend_employee_creation'), 10, 2);
+        
         // Alternative hook for when APC creates posts
         add_action('gform_after_submission', array($this, 'ensure_employee_post_data'), 20, 2);
     }
@@ -1071,6 +1078,142 @@ Ihr RT Team
         }
         
         return $result;
+    }
+    
+    /**
+     * Enqueue frontend scripts for user interface
+     */
+    public function enqueue_frontend_scripts() {
+        if (!is_admin()) {
+            wp_enqueue_script('jquery');
+        }
+    }
+    
+    /**
+     * Add frontend user interface modifications
+     */
+    public function add_frontend_user_interface() {
+        if (is_admin()) {
+            return;
+        }
+        
+        $current_user = wp_get_current_user();
+        $is_logged_in = is_user_logged_in();
+        $is_kunden = $is_logged_in && in_array('kunden', $current_user->roles);
+        
+        ?>
+        <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            <?php if ($is_kunden): ?>
+            // Hide login button for logged-in kunden users
+            $('.elementor-element-de74848').hide();
+            
+            // Show portal button if it has the class 'rt-portal-button' and is hidden
+            $('.rt-portal-button').show();
+            
+            // Replace login button with portal button
+            var portalButton = $('.rt-portal-button');
+            if (portalButton.length === 0) {
+                // Create portal button if it doesn't exist
+                var loginButton = $('.elementor-element-de74848');
+                if (loginButton.length > 0) {
+                    var portalHtml = '<div class="elementor-element elementor-element-portal rt-portal-button elementor-widget elementor-widget-button" style="display: block;">' +
+                        '<div class="elementor-widget-container">' +
+                        '<div class="elementor-button-wrapper">' +
+                        '<a class="elementor-button elementor-button-link elementor-size-sm" href="<?php echo admin_url('admin.php?page=rt-employee-manager'); ?>">' +
+                        '<span class="elementor-button-content-wrapper">' +
+                        '<span class="elementor-button-text">Mitarbeiter Portal</span>' +
+                        '</span>' +
+                        '</a>' +
+                        '</div>' +
+                        '</div>' +
+                        '</div>';
+                    
+                    loginButton.after(portalHtml);
+                }
+            }
+            
+            // Add user info display
+            var userInfo = '<div class="rt-user-info" style="position: fixed; top: 20px; right: 20px; background: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 9999; max-width: 200px;">' +
+                '<div style="margin-bottom: 5px;"><strong>Willkommen:</strong></div>' +
+                '<div style="margin-bottom: 5px; font-size: 12px;"><?php echo esc_js($current_user->display_name); ?></div>' +
+                <?php 
+                $company_name = get_user_meta($current_user->ID, 'company_name', true);
+                if ($company_name): 
+                ?>
+                '<div style="margin-bottom: 5px; font-size: 11px; color: #666;"><?php echo esc_js($company_name); ?></div>' +
+                <?php endif; ?>
+                '<div style="text-align: center; margin-top: 10px;">' +
+                '<a href="<?php echo admin_url('admin.php?page=rt-employee-manager'); ?>" style="text-decoration: none; background: #0073aa; color: white; padding: 5px 10px; border-radius: 3px; font-size: 11px;">Portal</a> ' +
+                '<a href="<?php echo wp_logout_url(home_url()); ?>" style="text-decoration: none; background: #dc3232; color: white; padding: 5px 10px; border-radius: 3px; font-size: 11px;">Logout</a>' +
+                '</div>' +
+                '</div>';
+            
+            $('body').append(userInfo);
+            
+            // Make user info dismissible
+            $('.rt-user-info').click(function(e) {
+                e.preventDefault();
+                $(this).fadeOut();
+            });
+            
+            <?php endif; ?>
+            
+            <?php if ($is_logged_in && !$is_kunden): ?>
+            // For other logged-in users (admin, etc.), just hide the login button
+            $('.elementor-element-de74848').hide();
+            <?php endif; ?>
+        });
+        </script>
+        
+        <style>
+        /* Styles for portal button */
+        .rt-portal-button {
+            display: none; /* Hidden by default, shown by JS for kunden users */
+        }
+        
+        .rt-portal-button .elementor-button {
+            background: #28a745 !important;
+            color: white !important;
+        }
+        
+        .rt-portal-button .elementor-button:hover {
+            background: #218838 !important;
+        }
+        
+        /* User info styles */
+        .rt-user-info {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            cursor: pointer;
+        }
+        
+        .rt-user-info:hover {
+            opacity: 0.9;
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .rt-user-info {
+                top: 10px;
+                right: 10px;
+                max-width: 150px;
+                font-size: 11px;
+            }
+        }
+        </style>
+        <?php
+    }
+    
+    /**
+     * Redirect backend employee creation to frontend form
+     */
+    public function redirect_backend_employee_creation($url, $path) {
+        if (strpos($path, 'post-new.php?post_type=angestellte') !== false) {
+            // Redirect to frontend employee registration form
+            return 'https://rt-buchhaltung.at/anmeldung-neue-r-dienstnehmer-in/';
+        }
+        
+        return $url;
     }
 }
 
