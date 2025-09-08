@@ -3,7 +3,7 @@
  * Plugin Name: RT Employee Manager
  * Plugin URI: https://edrishusein.com
  * Description: Professional employee management system with Gravity Forms integration, native WordPress meta boxes, and Austrian SVNR validation
- * Version: 2.2.0
+ * Version: 3.1.0
  * Author: Edris Husein
  * Text Domain: rt-employee-manager
  * Domain Path: /languages
