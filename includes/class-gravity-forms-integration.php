@@ -35,6 +35,15 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         // Advanced Post Creation integration
         add_action('gform_advancedpostcreation_post_after_creation', array($this, 'after_employee_post_creation'), 10, 4);
         
+        // Manual user approval workflow
+        add_action('wp_ajax_approve_company_registration', array($this, 'handle_company_approval'));
+        add_action('wp_ajax_reject_company_registration', array($this, 'handle_company_rejection'));
+        
+        // Password reset improvements for kunden users
+        add_filter('retrieve_password_message', array($this, 'custom_password_reset_message'), 10, 4);
+        add_filter('wp_mail_from_name', array($this, 'custom_mail_from_name'));
+        add_action('password_reset', array($this, 'after_password_reset'), 10, 2);
+        
         // Alternative hook for when APC creates posts
         add_action('gform_after_submission', array($this, 'ensure_employee_post_data'), 20, 2);
     }
@@ -656,6 +665,274 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         }
         
         return __('Zu viele Versuche. Bitte warten Sie eine Stunde oder kontaktieren Sie den Administrator.', 'rt-employee-manager');
+    }
+    
+    /**
+     * Handle company approval via AJAX
+     */
+    public function handle_company_approval() {
+        if (!current_user_can('manage_options')) {
+            wp_die('Unauthorized');
+        }
+        
+        $user_id = intval($_POST['user_id']);
+        $user = get_user_by('ID', $user_id);
+        
+        if (!$user) {
+            wp_die('User not found');
+        }
+        
+        // Update user status to active
+        update_user_meta($user_id, 'account_status', 'active');
+        
+        // Send approval email with login instructions
+        $this->send_approval_email($user);
+        
+        wp_send_json_success('Company approved and email sent');
+    }
+    
+    /**
+     * Handle company rejection via AJAX
+     */
+    public function handle_company_rejection() {
+        if (!current_user_can('manage_options')) {
+            wp_die('Unauthorized');
+        }
+        
+        $user_id = intval($_POST['user_id']);
+        $reason = sanitize_textarea_field($_POST['reason']);
+        
+        $user = get_user_by('ID', $user_id);
+        
+        if (!$user) {
+            wp_die('User not found');
+        }
+        
+        // Update user status to rejected
+        update_user_meta($user_id, 'account_status', 'rejected');
+        update_user_meta($user_id, 'rejection_reason', $reason);
+        
+        // Send rejection email
+        $this->send_rejection_email($user, $reason);
+        
+        wp_send_json_success('Company rejected and email sent');
+    }
+    
+    /**
+     * Send approval email with login instructions
+     */
+    private function send_approval_email($user) {
+        $company_name = get_user_meta($user->ID, 'company_name', true);
+        $login_url = wp_login_url();
+        $dashboard_url = admin_url('admin.php?page=rt-employee-manager');
+        
+        // Generate password reset link
+        $reset_key = get_password_reset_key($user);
+        if (!is_wp_error($reset_key)) {
+            $reset_url = network_site_url("wp-login.php?action=rp&key=$reset_key&login=" . rawurlencode($user->user_login), 'login');
+        } else {
+            $reset_url = wp_lostpassword_url();
+        }
+        
+        $subject = 'Ihr Unternehmenszugang wurde genehmigt - RT Employee Manager';
+        
+        $message = sprintf('
+Hallo %s,
+
+Ihr Unternehmenszugang für "%s" wurde erfolgreich genehmigt!
+
+Sie können sich jetzt in unser System einloggen:
+
+**Ihre Zugangsdaten:**
+Benutzername: %s
+E-Mail: %s
+
+**Login-Link:** %s
+
+**Passwort setzen:** 
+Falls Sie Ihr Passwort noch nicht gesetzt haben oder es vergessen haben, können Sie es hier zurücksetzen:
+%s
+
+**Nach dem Login können Sie:**
+- Neue Mitarbeiter registrieren
+- Mitarbeiterdaten verwalten
+- Ihr Unternehmensprofil aktualisieren
+
+**Direktlink zur Mitarbeiterverwaltung:** %s
+
+Bei Fragen stehen wir Ihnen gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+Ihr RT Team
+
+---
+Diese E-Mail wurde automatisch generiert.
+',
+            $company_name ?: $user->display_name,
+            $company_name ?: 'Ihr Unternehmen',
+            $user->user_login,
+            $user->user_email,
+            $login_url,
+            $reset_url,
+            $dashboard_url
+        );
+        
+        $headers = array('Content-Type: text/plain; charset=UTF-8');
+        
+        wp_mail($user->user_email, $subject, $message, $headers);
+        
+        // Also notify admin
+        $admin_email = get_option('rt_employee_manager_admin_email', get_option('admin_email'));
+        if ($admin_email !== $user->user_email) {
+            wp_mail($admin_email, 'Unternehmen genehmigt: ' . ($company_name ?: $user->display_name), 
+                sprintf('Das Unternehmen "%s" (%s) wurde genehmigt und benachrichtigt.', 
+                $company_name ?: $user->display_name, $user->user_email));
+        }
+        
+        $this->log_success('Approval email sent', array(
+            'user_id' => $user->ID,
+            'company_name' => $company_name,
+            'email' => $user->user_email
+        ));
+    }
+    
+    /**
+     * Send rejection email
+     */
+    private function send_rejection_email($user, $reason) {
+        $company_name = get_user_meta($user->ID, 'company_name', true);
+        
+        $subject = 'Ihr Registrierungsantrag - RT Employee Manager';
+        
+        $message = sprintf('
+Hallo %s,
+
+leider können wir Ihren Registrierungsantrag für "%s" derzeit nicht genehmigen.
+
+**Grund der Ablehnung:**
+%s
+
+Falls Sie Fragen haben oder zusätzliche Informationen bereitstellen möchten, können Sie sich gerne an uns wenden.
+
+Mit freundlichen Grüßen
+Ihr RT Team
+
+---
+Diese E-Mail wurde automatisch generiert.
+',
+            $company_name ?: $user->display_name,
+            $company_name ?: 'Ihr Unternehmen',
+            $reason ?: 'Keine spezifischen Informationen verfügbar.'
+        );
+        
+        $headers = array('Content-Type: text/plain; charset=UTF-8');
+        
+        wp_mail($user->user_email, $subject, $message, $headers);
+        
+        $this->log_success('Rejection email sent', array(
+            'user_id' => $user->ID,
+            'company_name' => $company_name,
+            'email' => $user->user_email,
+            'reason' => $reason
+        ));
+    }
+    
+    /**
+     * Custom password reset message for better user experience
+     */
+    public function custom_password_reset_message($message, $key, $user_login, $user_data) {
+        // Check if this is a kunden user
+        $user = get_user_by('login', $user_login);
+        if ($user && in_array('kunden', $user->roles)) {
+            $company_name = get_user_meta($user->ID, 'company_name', true);
+            $reset_url = network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user_login), 'login');
+            $dashboard_url = admin_url('admin.php?page=rt-employee-manager');
+            
+            $message = sprintf('
+Hallo %s,
+
+Sie haben eine Passwort-Zurücksetzung für Ihr RT Employee Manager Konto angefordert.
+
+**Unternehmen:** %s
+**Benutzername:** %s
+**E-Mail:** %s
+
+Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:
+%s
+
+Nach der Passwort-Zurücksetzung können Sie sich hier einloggen:
+%s
+
+**Direkt zur Mitarbeiterverwaltung:** %s
+
+Falls Sie diese Anfrage nicht gestellt haben, können Sie diese E-Mail ignorieren.
+
+Mit freundlichen Grüßen
+Ihr RT Team
+
+---
+Diese E-Mail wurde automatisch generiert.
+',
+                $company_name ?: $user->display_name,
+                $company_name ?: 'Nicht angegeben',
+                $user_login,
+                $user->user_email,
+                $reset_url,
+                wp_login_url(),
+                $dashboard_url
+            );
+        }
+        
+        return $message;
+    }
+    
+    /**
+     * Custom mail from name
+     */
+    public function custom_mail_from_name($name) {
+        return 'RT Employee Manager';
+    }
+    
+    /**
+     * After password reset - log and possibly send confirmation
+     */
+    public function after_password_reset($user, $new_pass) {
+        if (in_array('kunden', $user->roles)) {
+            $this->log_success('Password reset completed', array(
+                'user_id' => $user->ID,
+                'company_name' => get_user_meta($user->ID, 'company_name', true),
+                'email' => $user->user_email
+            ));
+            
+            // Optionally send confirmation email
+            if (get_option('rt_employee_manager_enable_email_notifications')) {
+                $company_name = get_user_meta($user->ID, 'company_name', true);
+                $dashboard_url = admin_url('admin.php?page=rt-employee-manager');
+                
+                $subject = 'Passwort erfolgreich zurückgesetzt - RT Employee Manager';
+                $message = sprintf('
+Hallo %s,
+
+Ihr Passwort für das RT Employee Manager System wurde erfolgreich zurückgesetzt.
+
+Sie können sich jetzt mit Ihrem neuen Passwort einloggen:
+%s
+
+**Direktlink zur Mitarbeiterverwaltung:** %s
+
+Falls Sie diese Änderung nicht vorgenommen haben, kontaktieren Sie uns bitte umgehend.
+
+Mit freundlichen Grüßen
+Ihr RT Team
+',
+                    $company_name ?: $user->display_name,
+                    wp_login_url(),
+                    $dashboard_url
+                );
+                
+                wp_mail($user->user_email, $subject, $message, array('Content-Type: text/plain; charset=UTF-8'));
+            }
+        }
     }
 }
 

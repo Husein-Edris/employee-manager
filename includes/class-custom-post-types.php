@@ -65,6 +65,9 @@ class RT_Employee_Manager_Custom_Post_Types {
             return;
         }
         
+        // Clean up any duplicate or conflicting post types first
+        self::cleanup_duplicate_post_types();
+        
         // Force flush rewrite rules to clear any cached post type data
         add_action('shutdown', 'flush_rewrite_rules');
         
@@ -619,5 +622,27 @@ class RT_Employee_Manager_Custom_Post_Types {
         remove_meta_box('authordiv', 'kunde', 'normal');
         remove_meta_box('postimagediv', 'kunde', 'side');
         remove_meta_box('pageparentdiv', 'kunde', 'side');
+    }
+    
+    /**
+     * Clean up duplicate or conflicting post types
+     */
+    private static function cleanup_duplicate_post_types() {
+        // Unregister any conflicting post types that might exist
+        global $wp_post_types;
+        
+        $conflicting_types = array('unternehmen', 'companies', 'clients');
+        
+        foreach ($conflicting_types as $type) {
+            if (isset($wp_post_types[$type])) {
+                unset($wp_post_types[$type]);
+                error_log('RT Employee Manager: Cleaned up conflicting post type: ' . $type);
+            }
+        }
+        
+        // Remove any admin menu items for conflicting post types
+        add_action('admin_menu', function() {
+            remove_menu_page('edit.php?post_type=unternehmen');
+        }, 999);
     }
 }

@@ -45,13 +45,14 @@ class RT_Employee_Manager_Meta_Boxes {
         wp_nonce_field('rt_employee_meta_box', 'rt_employee_meta_box_nonce');
         
         // Get existing values and clean placeholder data
-        $anrede = get_post_meta($post->ID, 'anrede', true);
-        $vorname = get_post_meta($post->ID, 'vorname', true);
-        $nachname = get_post_meta($post->ID, 'nachname', true);
-        $svnr = get_post_meta($post->ID, 'sozialversicherungsnummer', true);
-        $geburtsdatum = get_post_meta($post->ID, 'geburtsdatum', true);
-        $staatsangehoerigkeit = get_post_meta($post->ID, 'staatsangehoerigkeit', true);
-        $email = get_post_meta($post->ID, 'email', true);
+        // Try ACF fields first, then fallback to regular meta
+        $anrede = function_exists('get_field') ? get_field('anrede', $post->ID) : get_post_meta($post->ID, 'anrede', true);
+        $vorname = function_exists('get_field') ? get_field('vorname', $post->ID) : get_post_meta($post->ID, 'vorname', true);
+        $nachname = function_exists('get_field') ? get_field('nachname', $post->ID) : get_post_meta($post->ID, 'nachname', true);
+        $svnr = function_exists('get_field') ? get_field('sozialversicherungsnummer', $post->ID) : get_post_meta($post->ID, 'sozialversicherungsnummer', true);
+        $geburtsdatum = function_exists('get_field') ? get_field('geburtsdatum', $post->ID) : get_post_meta($post->ID, 'geburtsdatum', true);
+        $staatsangehoerigkeit = function_exists('get_field') ? get_field('staatsangehoerigkeit', $post->ID) : get_post_meta($post->ID, 'staatsangehoerigkeit', true);
+        $email = function_exists('get_field') ? get_field('email', $post->ID) : get_post_meta($post->ID, 'email', true);
         
         // Clean placeholder data - only remove obviously fake/test data
         $placeholder_patterns = array('test', 'placeholder', 'example', 'dummy', 'sample');
@@ -73,18 +74,19 @@ class RT_Employee_Manager_Meta_Boxes {
         if (in_array(strtolower($staatsangehoerigkeit), array('automatisch', 'gespeicherter', 'test', 'placeholder'))) {
             $staatsangehoerigkeit = '';
         }
-        $adresse = get_post_meta($post->ID, 'adresse', true);
-        $personenstand = get_post_meta($post->ID, 'personenstand', true);
-        $eintrittsdatum = get_post_meta($post->ID, 'eintrittsdatum', true);
-        $bezeichnung_der_tatigkeit = get_post_meta($post->ID, 'bezeichnung_der_tatigkeit', true);
-        $art_des_dienstverhaltnisses = get_post_meta($post->ID, 'art_des_dienstverhaltnisses', true);
-        $arbeitszeit_pro_woche = get_post_meta($post->ID, 'arbeitszeit_pro_woche', true);
-        $arbeitstagen = get_post_meta($post->ID, 'arbeitstagen', true);
-        $gehaltlohn = get_post_meta($post->ID, 'gehaltlohn', true);
-        $type = get_post_meta($post->ID, 'type', true);
-        $employer_id = get_post_meta($post->ID, 'employer_id', true);
-        $status = get_post_meta($post->ID, 'status', true) ?: 'active';
-        $anmerkungen = get_post_meta($post->ID, 'anmerkungen', true);
+        $adresse = function_exists('get_field') ? get_field('adresse', $post->ID) : get_post_meta($post->ID, 'adresse', true);
+        $personenstand = function_exists('get_field') ? get_field('personenstand', $post->ID) : get_post_meta($post->ID, 'personenstand', true);
+        $eintrittsdatum = function_exists('get_field') ? get_field('eintrittsdatum', $post->ID) : get_post_meta($post->ID, 'eintrittsdatum', true);
+        $bezeichnung_der_tatigkeit = function_exists('get_field') ? get_field('bezeichnung_der_tatigkeit', $post->ID) : get_post_meta($post->ID, 'bezeichnung_der_tatigkeit', true);
+        $art_des_dienstverhaltnisses = function_exists('get_field') ? get_field('art_des_dienstverhaltnisses', $post->ID) : get_post_meta($post->ID, 'art_des_dienstverhaltnisses', true);
+        $arbeitszeit_pro_woche = function_exists('get_field') ? get_field('arbeitszeit_pro_woche', $post->ID) : get_post_meta($post->ID, 'arbeitszeit_pro_woche', true);
+        $arbeitstagen = function_exists('get_field') ? get_field('arbeitstagen', $post->ID) : get_post_meta($post->ID, 'arbeitstagen', true);
+        $gehaltlohn = function_exists('get_field') ? get_field('gehaltlohn', $post->ID) : get_post_meta($post->ID, 'gehaltlohn', true);
+        $type = function_exists('get_field') ? get_field('type', $post->ID) : get_post_meta($post->ID, 'type', true);
+        $employer_id = function_exists('get_field') ? get_field('employer_id', $post->ID) : get_post_meta($post->ID, 'employer_id', true);
+        $status = function_exists('get_field') ? get_field('status', $post->ID) : get_post_meta($post->ID, 'status', true);
+        $status = $status ?: 'active';
+        $anmerkungen = function_exists('get_field') ? get_field('anmerkungen', $post->ID) : get_post_meta($post->ID, 'anmerkungen', true);
         
         // Default address structure
         if (!is_array($adresse)) {
@@ -467,6 +469,12 @@ class RT_Employee_Manager_Meta_Boxes {
      * Save employee meta data
      */
     private function save_employee_meta($post_id) {
+        // Log the save attempt
+        if (get_option('rt_employee_manager_enable_logging')) {
+            error_log('RT Employee Manager: Saving employee meta for post ' . $post_id);
+            error_log('RT Employee Manager: POST data keys: ' . implode(', ', array_keys($_POST)));
+        }
+        
         $fields = array(
             'anrede', 'vorname', 'nachname', 'sozialversicherungsnummer', 'geburtsdatum',
             'staatsangehoerigkeit', 'email', 'personenstand', 'eintrittsdatum',
@@ -475,8 +483,27 @@ class RT_Employee_Manager_Meta_Boxes {
         );
         
         foreach ($fields as $field) {
-            if (isset($_POST[$field])) {
-                update_post_meta($post_id, $field, sanitize_text_field($_POST[$field]));
+            if (isset($_POST[$field]) && $_POST[$field] !== '') {
+                $value = sanitize_text_field($_POST[$field]);
+                update_post_meta($post_id, $field, $value);
+                
+                // Also update ACF field if ACF is available
+                if (function_exists('update_field')) {
+                    update_field($field, $value, $post_id);
+                }
+                
+                // Debug logging
+                if (get_option('rt_employee_manager_enable_logging')) {
+                    error_log("RT Employee Manager: Saved meta {$field} = {$value} for post {$post_id}");
+                }
+            } elseif (isset($_POST[$field]) && $_POST[$field] === '') {
+                // Delete empty values to prevent storing empty strings
+                delete_post_meta($post_id, $field);
+                
+                // Also delete ACF field if available
+                if (function_exists('delete_field')) {
+                    delete_field($field, $post_id);
+                }
             }
         }
         
@@ -519,19 +546,33 @@ class RT_Employee_Manager_Meta_Boxes {
             update_post_meta($post_id, 'status', 'active');
         }
         
-        // Set employer_id to current user if not set (for kunden users)
-        if (!get_post_meta($post_id, 'employer_id', true)) {
-            $current_user = wp_get_current_user();
-            if (in_array('kunden', $current_user->roles)) {
-                update_post_meta($post_id, 'employer_id', $current_user->ID);
-            }
-        }
+        // Set employer_id logic
+        $current_employer_id = get_post_meta($post_id, 'employer_id', true);
+        $current_user = wp_get_current_user();
         
-        // Set default employer if empty and user is kunden
-        if (empty($_POST['employer_id']) && is_user_logged_in()) {
-            $current_user = wp_get_current_user();
+        if (empty($current_employer_id) && empty($_POST['employer_id'])) {
+            // Auto-assign for kunden users
             if (in_array('kunden', $current_user->roles)) {
                 update_post_meta($post_id, 'employer_id', $current_user->ID);
+                if (get_option('rt_employee_manager_enable_logging')) {
+                    error_log("RT Employee Manager: Auto-assigned employer_id {$current_user->ID} for kunden user");
+                }
+            } elseif (current_user_can('manage_options')) {
+                // For admin users, we need an employer to be selected
+                // Get the first available kunden user as fallback
+                $kunden_users = get_users(array('role' => 'kunden', 'number' => 1));
+                if (!empty($kunden_users)) {
+                    update_post_meta($post_id, 'employer_id', $kunden_users[0]->ID);
+                    if (get_option('rt_employee_manager_enable_logging')) {
+                        error_log("RT Employee Manager: Auto-assigned employer_id {$kunden_users[0]->ID} as fallback for admin");
+                    }
+                }
+            }
+        } elseif (!empty($_POST['employer_id']) && is_numeric($_POST['employer_id'])) {
+            // Use the posted employer_id if valid
+            update_post_meta($post_id, 'employer_id', intval($_POST['employer_id']));
+            if (get_option('rt_employee_manager_enable_logging')) {
+                error_log("RT Employee Manager: Set employer_id from POST: " . intval($_POST['employer_id']));
             }
         }
         
