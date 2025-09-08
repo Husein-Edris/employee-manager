@@ -44,6 +44,11 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         add_filter('wp_mail_from_name', array($this, 'custom_mail_from_name'));
         add_action('password_reset', array($this, 'after_password_reset'), 10, 2);
         
+        // German translations for Gravity Forms
+        add_filter('gform_pre_render', array($this, 'translate_form_labels'));
+        add_filter('gform_validation_message', array($this, 'translate_validation_messages'), 10, 2);
+        add_filter('gform_field_validation', array($this, 'translate_field_validation_messages'), 10, 4);
+        
         // Alternative hook for when APC creates posts
         add_action('gform_after_submission', array($this, 'ensure_employee_post_data'), 20, 2);
     }
@@ -933,6 +938,139 @@ Ihr RT Team
                 wp_mail($user->user_email, $subject, $message, array('Content-Type: text/plain; charset=UTF-8'));
             }
         }
+    }
+    
+    /**
+     * Translate Gravity Forms labels to German
+     */
+    public function translate_form_labels($form) {
+        // Translation mappings for common form elements
+        $translations = array(
+            'Step 1 of 2' => 'Schritt 1 von 2',
+            'Step 2 of 2' => 'Schritt 2 von 2',
+            'Step 1 of 3' => 'Schritt 1 von 3',
+            'Step 2 of 3' => 'Schritt 2 von 3',
+            'Step 3 of 3' => 'Schritt 3 von 3',
+            'Next' => 'Weiter',
+            'Previous' => 'Zurück',
+            'Submit' => 'Senden',
+            'Save and Continue Later' => 'Speichern und später fortsetzen',
+            'Required field' => 'Pflichtfeld',
+            'This field is required' => 'Dieses Feld ist erforderlich',
+            'Please enter a valid email address' => 'Bitte geben Sie eine gültige E-Mail-Adresse ein',
+            'Please enter a valid phone number' => 'Bitte geben Sie eine gültige Telefonnummer ein',
+            'Please enter a valid date' => 'Bitte geben Sie ein gültiges Datum ein',
+            'File upload' => 'Datei hochladen',
+            'Choose Files' => 'Dateien auswählen',
+            'Maximum file size exceeded' => 'Maximale Dateigröße überschritten',
+            'Acceptable file types' => 'Zulässige Dateitypen',
+            'Drop files here or' => 'Dateien hier ablegen oder',
+            'select files' => 'Dateien auswählen'
+        );
+        
+        // Translate page names (multi-page forms)
+        if (isset($form['pagination']) && $form['pagination']) {
+            if (isset($form['pagination']['pages']) && is_array($form['pagination']['pages'])) {
+                foreach ($form['pagination']['pages'] as $key => $page) {
+                    if (isset($translations[$page])) {
+                        $form['pagination']['pages'][$key] = $translations[$page];
+                    }
+                }
+            }
+            
+            // Translate next/previous button text
+            if (isset($form['pagination']['nextText']) && isset($translations[$form['pagination']['nextText']])) {
+                $form['pagination']['nextText'] = $translations[$form['pagination']['nextText']];
+            }
+            if (isset($form['pagination']['previousText']) && isset($translations[$form['pagination']['previousText']])) {
+                $form['pagination']['previousText'] = $translations[$form['pagination']['previousText']];
+            }
+        }
+        
+        // Translate button text
+        if (isset($form['button']['text']) && isset($translations[$form['button']['text']])) {
+            $form['button']['text'] = $translations[$form['button']['text']];
+        }
+        
+        // Translate field labels and descriptions
+        foreach ($form['fields'] as &$field) {
+            // Translate common field labels
+            if (isset($field->label) && isset($translations[$field->label])) {
+                $field->label = $translations[$field->label];
+            }
+            
+            // Translate field descriptions
+            if (isset($field->description) && isset($translations[$field->description])) {
+                $field->description = $translations[$field->description];
+            }
+            
+            // Translate field placeholders
+            if (isset($field->placeholder) && isset($translations[$field->placeholder])) {
+                $field->placeholder = $translations[$field->placeholder];
+            }
+            
+            // Translate validation messages
+            if (isset($field->errorMessage) && isset($translations[$field->errorMessage])) {
+                $field->errorMessage = $translations[$field->errorMessage];
+            }
+            
+            // Translate choice labels for select/radio/checkbox fields
+            if (isset($field->choices) && is_array($field->choices)) {
+                foreach ($field->choices as &$choice) {
+                    if (isset($choice['text']) && isset($translations[$choice['text']])) {
+                        $choice['text'] = $translations[$choice['text']];
+                    }
+                }
+            }
+        }
+        
+        return $form;
+    }
+    
+    /**
+     * Translate validation messages
+     */
+    public function translate_validation_messages($message, $form) {
+        $translations = array(
+            'There was a problem with your submission' => 'Es gab ein Problem mit Ihrer Übermittlung',
+            'Please review the fields below' => 'Bitte überprüfen Sie die unten stehenden Felder',
+            'Errors have been highlighted below' => 'Fehler wurden unten hervorgehoben',
+            'Please fix the errors below and try again' => 'Bitte beheben Sie die unten stehenden Fehler und versuchen Sie es erneut'
+        );
+        
+        foreach ($translations as $english => $german) {
+            $message = str_replace($english, $german, $message);
+        }
+        
+        return $message;
+    }
+    
+    /**
+     * Translate individual field validation messages
+     */
+    public function translate_field_validation_messages($result, $value, $form, $field) {
+        if (!$result['is_valid'] && isset($result['message'])) {
+            $translations = array(
+                'This field is required.' => 'Dieses Feld ist erforderlich.',
+                'Please enter a valid email address.' => 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
+                'Please enter a valid phone number.' => 'Bitte geben Sie eine gültige Telefonnummer ein.',
+                'Please enter a valid date.' => 'Bitte geben Sie ein gültiges Datum ein.',
+                'Please enter a valid number.' => 'Bitte geben Sie eine gültige Zahl ein.',
+                'Please enter a valid URL.' => 'Bitte geben Sie eine gültige URL ein.',
+                'The passwords do not match.' => 'Die Passwörter stimmen nicht überein.',
+                'Password is too short.' => 'Das Passwort ist zu kurz.',
+                'Please select an option.' => 'Bitte wählen Sie eine Option aus.',
+                'Please upload a file.' => 'Bitte laden Sie eine Datei hoch.',
+                'File type not allowed.' => 'Dateityp nicht erlaubt.',
+                'File size too large.' => 'Datei zu groß.'
+            );
+            
+            foreach ($translations as $english => $german) {
+                $result['message'] = str_replace($english, $german, $result['message']);
+            }
+        }
+        
+        return $result;
     }
 }
 

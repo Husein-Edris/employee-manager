@@ -391,7 +391,7 @@ class RT_Employee_Manager_Registration_Admin
     {
         $registrations = $this->get_registrations('rejected');
     ?>
-<p><?php _e('Unternehmen, die abgelehnt wurden.', 'rt-employee-manager'); ?></p>
+<p><?php _e('Unternehmen, die abgelehnt wurden. ', 'rt-employee-manager'); ?></p>
 
 <?php if (empty($registrations)): ?>
 <div class="notice notice-info">
