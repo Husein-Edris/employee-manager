@@ -543,16 +543,51 @@ class RT_Employee_Manager_Meta_Boxes {
             if (!empty($title)) {
                 // Get current post status
                 $current_post = get_post($post_id);
-                $post_status = $current_post->post_status;
+                $current_status = $current_post->post_status;
                 
-                // Auto-publish if we have data
-                if ($post_status === 'auto-draft' || $post_status === 'draft') {
+                // Determine new status - always publish for backend saves with data
+                $post_status = 'publish';
+                
+                // Check if this is a manual backend save (has required fields)
+                $has_required_data = !empty($vorname_value) && !empty($nachname_value);
+                $has_eintrittsdatum = !empty($_POST['eintrittsdatum']);
+                $has_art_dienstverhaeltnis = !empty($_POST['art_des_dienstverhaltnisses']);
+                
+                // If user has filled in the core required fields, always publish
+                if ($has_required_data && ($has_eintrittsdatum || $has_art_dienstverhaeltnis)) {
                     $post_status = 'publish';
+                    
+                    if (get_option('rt_employee_manager_enable_logging')) {
+                        error_log("RT Employee Manager: Auto-publishing post {$post_id} - has required data");
+                    }
+                } elseif ($current_status === 'auto-draft' || $current_status === 'draft') {
+                    // Only auto-publish drafts/auto-drafts if we have basic data
+                    if ($has_required_data) {
+                        $post_status = 'publish';
+                        
+                        if (get_option('rt_employee_manager_enable_logging')) {
+                            error_log("RT Employee Manager: Auto-publishing draft {$post_id} - converting to publish");
+                        }
+                    } else {
+                        // Keep as draft if insufficient data
+                        $post_status = 'draft';
+                        
+                        if (get_option('rt_employee_manager_enable_logging')) {
+                            error_log("RT Employee Manager: Keeping as draft {$post_id} - insufficient data");
+                        }
+                    }
+                } else {
+                    // Keep existing status if already published/private etc
+                    $post_status = $current_status;
                 }
                 
-                // If user explicitly clicked "Publish" or "Update"
-                if (isset($_POST['publish']) || isset($_POST['save']) || isset($_POST['original_post_status'])) {
+                // Force publish if user explicitly saved
+                if (isset($_POST['publish']) || isset($_POST['save']) || (isset($_POST['post_status']) && $_POST['post_status'] === 'publish')) {
                     $post_status = 'publish';
+                    
+                    if (get_option('rt_employee_manager_enable_logging')) {
+                        error_log("RT Employee Manager: Force publishing {$post_id} - user action");
+                    }
                 }
                 
                 wp_update_post(array(
@@ -602,10 +637,24 @@ class RT_Employee_Manager_Meta_Boxes {
             }
         }
         
-        // Clear statistics cache
+        // Clear statistics cache more aggressively
         delete_transient('rt_admin_stats');
-        if (!empty($_POST['employer_id'])) {
-            delete_transient('rt_user_stats_' . $_POST['employer_id']);
+        $final_employer_id = get_post_meta($post_id, 'employer_id', true);
+        if (!empty($final_employer_id)) {
+            delete_transient('rt_user_stats_' . $final_employer_id);
+            
+            // Clear WordPress object cache patterns
+            wp_cache_delete('rt_employee_stats_' . $final_employer_id, 'rt_employee');
+            wp_cache_delete('rt_employee_stats', 'rt_employee');
+        }
+        
+        // Force clear all stats-related caches
+        global $wpdb;
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_rt_%stats%'");
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_rt_%stats%'");
+        
+        if (get_option('rt_employee_manager_enable_logging')) {
+            error_log("RT Employee Manager: Force cleared all statistics caches for post {$post_id}");
         }
     }
     

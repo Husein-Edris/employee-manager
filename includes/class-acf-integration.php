@@ -20,6 +20,9 @@ class RT_Employee_Manager_ACF_Integration
         add_action('acf/load_field/name=vorname', array($this, 'clean_placeholder_data'));
         add_action('acf/load_field/name=nachname', array($this, 'clean_placeholder_data'));
         add_action('acf/load_field/name=sozialversicherungsnummer', array($this, 'clean_placeholder_data'));
+        
+        // Hook into post status transitions to force statistics update
+        add_action('transition_post_status', array($this, 'handle_employee_status_transition'), 10, 3);
     }
 
     /**
@@ -403,16 +406,51 @@ class RT_Employee_Manager_ACF_Integration
      */
     private function process_employee_save($post_id)
     {
-        // Update post title with employee name
+        // Update post title with employee name and ensure proper status
         $vorname = get_field('vorname', $post_id);
         $nachname = get_field('nachname', $post_id);
 
         if ($vorname && $nachname) {
             $title = $vorname . ' ' . $nachname;
+            $current_post = get_post($post_id);
+            $current_status = $current_post->post_status;
+            
+            // Determine if we should publish
+            $should_publish = false;
+            
+            // Check if we have required employment data
+            $eintrittsdatum = get_field('eintrittsdatum', $post_id);
+            $art_dienstverhaeltnis = get_field('art_des_dienstverhaltnisses', $post_id);
+            
+            if (!empty($eintrittsdatum) || !empty($art_dienstverhaeltnis)) {
+                $should_publish = true;
+            }
+            
+            // Auto-publish if we have complete employee data
+            if ($current_status === 'auto-draft' || $current_status === 'draft') {
+                if ($should_publish) {
+                    $post_status = 'publish';
+                    
+                    if (get_option('rt_employee_manager_enable_logging')) {
+                        error_log("RT Employee Manager (ACF): Auto-publishing employee {$post_id} with complete data");
+                    }
+                } else {
+                    $post_status = 'draft';
+                }
+            } else {
+                // Keep existing status for already published posts
+                $post_status = $current_status;
+            }
+            
             wp_update_post(array(
                 'ID' => $post_id,
-                'post_title' => $title
+                'post_title' => $title,
+                'post_status' => $post_status
             ));
+            
+            if (get_option('rt_employee_manager_enable_logging')) {
+                error_log("RT Employee Manager (ACF): Updated employee {$post_id} title to '{$title}' and status to '{$post_status}'");
+            }
         }
 
         // Validate and format SVNR
@@ -427,7 +465,17 @@ class RT_Employee_Manager_ACF_Integration
         // Set employer ID if not set
         $employer_id = get_field('employer_id', $post_id);
         if (empty($employer_id) && is_user_logged_in()) {
-            update_field('employer_id', get_current_user_id(), $post_id);
+            $current_user = wp_get_current_user();
+            update_field('employer_id', $current_user->ID, $post_id);
+            
+            if (get_option('rt_employee_manager_enable_logging')) {
+                error_log("RT Employee Manager (ACF): Set employer_id to {$current_user->ID} for employee {$post_id}");
+            }
+        }
+        
+        // Ensure status meta field is set
+        if (empty(get_field('status', $post_id))) {
+            update_field('status', 'active', $post_id);
         }
 
         // Log the save
@@ -608,6 +656,28 @@ class RT_Employee_Manager_ACF_Integration
         // Clear user-specific stats cache
         if ($employer_id) {
             delete_transient('rt_user_stats_' . $employer_id);
+        }
+    }
+    
+    /**
+     * Handle employee status transitions - clear cache when published
+     */
+    public function handle_employee_status_transition($new_status, $old_status, $post)
+    {
+        if ($post->post_type !== 'angestellte') {
+            return;
+        }
+        
+        // If transitioning to published, force clear statistics cache
+        if ($new_status === 'publish' && $old_status !== 'publish') {
+            $this->clear_statistics_cache($post->ID);
+            
+            // Also clear global cache patterns
+            wp_cache_delete('rt_employee_stats', 'rt_employee');
+            
+            if (get_option('rt_employee_manager_enable_logging')) {
+                error_log("RT Employee Manager (ACF): Cleared statistics cache for newly published employee {$post->ID}");
+            }
         }
     }
 
