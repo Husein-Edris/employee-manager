@@ -104,7 +104,15 @@ class RT_Employee_Manager_Employee_Dashboard {
         ?>
         <div id="rt-employee-dashboard" class="rt-employee-dashboard">
             <div class="rt-dashboard-header">
-                <h2><?php _e('Mitarbeiter Dashboard', 'rt-employee-manager'); ?></h2>
+                <div class="rt-dashboard-title-section">
+                    <h2><?php _e('Mitarbeiter Dashboard', 'rt-employee-manager'); ?></h2>
+                    <div class="rt-dashboard-actions">
+                        <a href="/anmeldung-neue-r-dienstnehmer-in/" class="button button-primary rt-add-employee-btn">
+                            <span class="dashicons dashicons-plus-alt"></span>
+                            <?php _e('Neuen Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
+                        </a>
+                    </div>
+                </div>
                 
                 <!-- Statistics -->
                 <div class="rt-dashboard-stats">
@@ -199,11 +207,18 @@ class RT_Employee_Manager_Employee_Dashboard {
                     
                 <?php else: ?>
                     <div class="rt-no-employees">
-                        <p><?php _e('Keine Mitarbeiter gefunden.', 'rt-employee-manager'); ?></p>
-                        <div class="rt-add-employee-section">
-                            <a href="<?php echo admin_url('post-new.php?post_type=angestellte'); ?>" class="button button-primary">
-                                <?php _e('Ersten Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
-                            </a>
+                        <div class="rt-no-employees-content">
+                            <div class="rt-no-employees-icon">
+                                <span class="dashicons dashicons-groups" style="font-size: 48px; color: #ccc;"></span>
+                            </div>
+                            <h3><?php _e('Noch keine Mitarbeiter vorhanden', 'rt-employee-manager'); ?></h3>
+                            <p><?php _e('Fügen Sie Ihren ersten Mitarbeiter hinzu, um mit der Verwaltung zu beginnen.', 'rt-employee-manager'); ?></p>
+                            <div class="rt-add-employee-section">
+                                <a href="/anmeldung-neue-r-dienstnehmer-in/" class="button button-primary button-large">
+                                    <span class="dashicons dashicons-plus-alt"></span>
+                                    <?php _e('Ersten Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
+                                </a>
+                            </div>
                         </div>
                     </div>
                 <?php endif; ?>
