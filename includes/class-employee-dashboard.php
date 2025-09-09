@@ -60,10 +60,10 @@ class RT_Employee_Manager_Employee_Dashboard
         $search = isset($_GET['employee_search']) ? sanitize_text_field($_GET['employee_search']) : '';
         $status_filter = isset($_GET['status_filter']) ? sanitize_text_field($_GET['status_filter']) : '';
 
-        // Build query args
+        // Build query args - show all employees for presentation
         $args = array(
             'post_type' => 'angestellte',
-            'posts_per_page' => $atts['per_page'],
+            'posts_per_page' => -1, // Show all employees, no pagination limit
             'paged' => $paged,
             'meta_query' => array(
                 array(
@@ -152,7 +152,7 @@ class RT_Employee_Manager_Employee_Dashboard
     </div>
 
     <!-- Search and Filters -->
-    <?php if (($atts['show_search'] === 'true' || $atts['show_filters'] === 'true') && $employees->found_posts >= 5): ?>
+    <?php if ($atts['show_search'] === 'true' || $atts['show_filters'] === 'true'): ?>
     <div class="rt-dashboard-controls">
         <form method="get" class="rt-employee-search-form">
             <?php if ($atts['show_search'] === 'true'): ?>

@@ -869,6 +869,272 @@ if (!function_exists('is_plugin_active')) {
     include_once(ABSPATH . 'wp-admin/includes/plugin.php');
 }
 
+/**
+ * Create sample employees for demonstration purposes
+ */
+function rt_create_sample_employees($user_id = null) {
+    if (!$user_id) {
+        $user_id = get_current_user_id();
+    }
+    
+    $sample_employees = array(
+        array(
+            'title' => 'Maria Schmidt',
+            'vorname' => 'Maria',
+            'nachname' => 'Schmidt',
+            'sozialversicherungsnummer' => '12 3456 78 90',
+            'bezeichnung_der_tatigkeit' => 'Buchhalterin',
+            'eintrittsdatum' => '2023-03-15',
+            'geburtsdatum' => '1985-07-22',
+            'status' => 'active',
+            'email' => 'maria.schmidt@example.com',
+            'telefon' => '+43 1 123 4567',
+            'gehaltlohn' => '3200.00',
+            'arbeitszeit_pro_woche' => '40',
+            'art_des_dienstverhaltnisses' => 'Angestellte',
+        ),
+        array(
+            'title' => 'Thomas Müller',
+            'vorname' => 'Thomas', 
+            'nachname' => 'Müller',
+            'sozialversicherungsnummer' => '23 4567 89 01',
+            'bezeichnung_der_tatigkeit' => 'Steuerberater',
+            'eintrittsdatum' => '2022-09-01',
+            'geburtsdatum' => '1978-11-03',
+            'status' => 'active',
+            'email' => 'thomas.mueller@example.com',
+            'telefon' => '+43 1 234 5678',
+            'gehaltlohn' => '4500.00',
+            'arbeitszeit_pro_woche' => '40',
+            'art_des_dienstverhaltnisses' => 'Angestellter',
+        ),
+        array(
+            'title' => 'Anna Weber',
+            'vorname' => 'Anna',
+            'nachname' => 'Weber', 
+            'sozialversicherungsnummer' => '34 5678 90 12',
+            'bezeichnung_der_tatigkeit' => 'Lehrling',
+            'eintrittsdatum' => '2024-01-08',
+            'geburtsdatum' => '2005-04-18',
+            'status' => 'active',
+            'email' => 'anna.weber@example.com',
+            'telefon' => '+43 1 345 6789',
+            'gehaltlohn' => '850.00',
+            'arbeitszeit_pro_woche' => '38',
+            'art_des_dienstverhaltnisses' => 'Lehrling',
+        ),
+        array(
+            'title' => 'Klaus Fischer',
+            'vorname' => 'Klaus',
+            'nachname' => 'Fischer',
+            'sozialversicherungsnummer' => '45 6789 01 23', 
+            'bezeichnung_der_tatigkeit' => 'Projektleiter',
+            'eintrittsdatum' => '2021-06-15',
+            'geburtsdatum' => '1975-12-10',
+            'status' => 'inactive',
+            'email' => 'klaus.fischer@example.com',
+            'telefon' => '+43 1 456 7890',
+            'gehaltlohn' => '3800.00',
+            'arbeitszeit_pro_woche' => '40',
+            'art_des_dienstverhaltnisses' => 'Angestellter',
+        ),
+        array(
+            'title' => 'Sandra Bauer',
+            'vorname' => 'Sandra',
+            'nachname' => 'Bauer',
+            'sozialversicherungsnummer' => '56 7890 12 34',
+            'bezeichnung_der_tatigkeit' => 'Sekretärin', 
+            'eintrittsdatum' => '2020-02-01',
+            'geburtsdatum' => '1992-08-25',
+            'status' => 'terminated',
+            'email' => 'sandra.bauer@example.com',
+            'telefon' => '+43 1 567 8901',
+            'gehaltlohn' => '2800.00',
+            'arbeitszeit_pro_woche' => '35',
+            'art_des_dienstverhaltnisses' => 'Angestellte',
+        )
+    );
+    
+    foreach ($sample_employees as $employee_data) {
+        // Create the post
+        $post_id = wp_insert_post(array(
+            'post_title' => $employee_data['title'],
+            'post_type' => 'angestellte',
+            'post_status' => 'publish',
+            'post_author' => $user_id
+        ));
+        
+        if ($post_id && !is_wp_error($post_id)) {
+            // Add employer_id
+            update_post_meta($post_id, 'employer_id', $user_id);
+            
+            // Add all employee meta data
+            foreach ($employee_data as $key => $value) {
+                if ($key !== 'title') {
+                    update_post_meta($post_id, $key, $value);
+                    
+                    // Also add ACF fields if ACF is available
+                    if (function_exists('update_field')) {
+                        update_field($key, $value, $post_id);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Fix existing employee posts that might be missing meta data
+ */
+function rt_fix_existing_employees() {
+    $employees = get_posts(array(
+        'post_type' => 'angestellte',
+        'numberposts' => -1,
+        'post_status' => 'publish'
+    ));
+    
+    $fixed_count = 0;
+    
+    foreach ($employees as $employee) {
+        $needs_fix = false;
+        
+        // Check if essential fields are missing
+        $vorname = get_post_meta($employee->ID, 'vorname', true);
+        $nachname = get_post_meta($employee->ID, 'nachname', true);
+        
+        if (empty($vorname) && empty($nachname)) {
+            // Extract name from title if possible
+            $title_parts = explode(' ', $employee->post_title, 2);
+            if (count($title_parts) >= 2) {
+                update_post_meta($employee->ID, 'vorname', $title_parts[0]);
+                update_post_meta($employee->ID, 'nachname', $title_parts[1]);
+                $needs_fix = true;
+            }
+        }
+        
+        // Ensure employer_id is set
+        $employer_id = get_post_meta($employee->ID, 'employer_id', true);
+        if (empty($employer_id)) {
+            update_post_meta($employee->ID, 'employer_id', $employee->post_author);
+            $needs_fix = true;
+        }
+        
+        // Ensure status is set
+        $status = get_post_meta($employee->ID, 'status', true);
+        if (empty($status)) {
+            update_post_meta($employee->ID, 'status', 'active');
+            $needs_fix = true;
+        }
+        
+        if ($needs_fix) {
+            $fixed_count++;
+        }
+    }
+    
+    return $fixed_count;
+}
+
+/**
+ * Add admin action to fix existing employees
+ */
+add_action('wp_ajax_rt_fix_employees', function() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Unauthorized');
+    }
+    
+    if (!wp_verify_nonce($_POST['nonce'], 'rt_fix_employees')) {
+        wp_die('Invalid nonce');
+    }
+    
+    $fixed_count = rt_fix_existing_employees();
+    
+    wp_send_json_success(array(
+        'message' => "Fixed $fixed_count employee posts"
+    ));
+});
+
+/**
+ * Add admin action to create sample data
+ */
+add_action('wp_ajax_rt_create_sample_data', function() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Unauthorized');
+    }
+    
+    if (!wp_verify_nonce($_POST['nonce'], 'rt_sample_data')) {
+        wp_die('Invalid nonce');
+    }
+    
+    rt_create_sample_employees();
+    
+    wp_send_json_success(array(
+        'message' => 'Sample employee data created successfully!'
+    ));
+});
+
+/**
+ * Add admin notice with button to create sample data
+ */
+add_action('admin_notices', function() {
+    if (!current_user_can('manage_options')) {
+        return;
+    }
+    
+    $screen = get_current_screen();
+    if (!$screen || $screen->post_type !== 'angestellte') {
+        return;
+    }
+    
+    // Check if we already have employees
+    $employee_count = wp_count_posts('angestellte');
+    if ($employee_count->publish > 0) {
+        return;
+    }
+    
+    ?>
+    <div class="notice notice-info is-dismissible" id="rt-sample-data-notice">
+        <p><strong>RT Employee Manager:</strong> No employees found. Would you like to create sample data for demonstration?</p>
+        <p>
+            <button type="button" class="button button-primary" id="rt-create-sample-btn">Create Sample Data</button>
+            <button type="button" class="button button-secondary" onclick="jQuery('#rt-sample-data-notice').slideUp()">Dismiss</button>
+        </p>
+    </div>
+    
+    <script>
+    jQuery(document).ready(function($) {
+        $('#rt-create-sample-btn').on('click', function() {
+            const btn = $(this);
+            btn.prop('disabled', true).text('Creating...');
+            
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'rt_create_sample_data',
+                    nonce: '<?php echo wp_create_nonce('rt_sample_data'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#rt-sample-data-notice').html('<p style="color: green;"><strong>Success!</strong> Sample data created. Refreshing page...</p>');
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1500);
+                    } else {
+                        btn.prop('disabled', false).text('Create Sample Data');
+                        alert('Error creating sample data: ' + (response.data.message || 'Unknown error'));
+                    }
+                },
+                error: function() {
+                    btn.prop('disabled', false).text('Create Sample Data');
+                    alert('Ajax error occurred');
+                }
+            });
+        });
+    });
+    </script>
+    <?php
+});
+
 if (is_plugin_active(plugin_basename(__FILE__))) {
     RT_Employee_Manager::get_instance();
 } else {
