@@ -269,15 +269,17 @@ class RT_Employee_Manager_Employee_Dashboard {
                 </span>
             </td>
             <td class="employee-actions">
-                <?php if ($atts['allow_edit'] === 'true'): ?>
-                <button type="button" 
-                        class="rt-btn rt-btn-edit" 
-                        data-employee-id="<?php echo esc_attr($employee_id); ?>"
-                        title="<?php _e('Bearbeiten', 'rt-employee-manager'); ?>">
-                    📝
-                </button>
+                <!-- Only show WordPress admin edit link for backend editing -->
+                <?php if (current_user_can('edit_post', $employee_id)): ?>
+                <a href="<?php echo get_edit_post_link($employee_id); ?>" 
+                   class="button button-small" 
+                   title="<?php _e('Im Backend bearbeiten', 'rt-employee-manager'); ?>"
+                   target="_blank">
+                    <?php _e('Bearbeiten', 'rt-employee-manager'); ?>
+                </a>
                 <?php endif; ?>
                 
+                <!-- Status selector remains for quick status changes -->
                 <select class="rt-status-select" data-employee-id="<?php echo esc_attr($employee_id); ?>">
                     <?php foreach ($status_labels as $value => $label): ?>
                     <option value="<?php echo esc_attr($value); ?>" <?php selected($status, $value); ?>>
@@ -285,16 +287,6 @@ class RT_Employee_Manager_Employee_Dashboard {
                     </option>
                     <?php endforeach; ?>
                 </select>
-                
-                <?php if ($atts['allow_delete'] === 'true'): ?>
-                <button type="button" 
-                        class="rt-btn rt-btn-delete" 
-                        data-employee-id="<?php echo esc_attr($employee_id); ?>"
-                        data-employee-name="<?php echo esc_attr($vorname . ' ' . $nachname); ?>"
-                        title="<?php _e('Löschen', 'rt-employee-manager'); ?>">
-                    🗑️
-                </button>
-                <?php endif; ?>
             </td>
         </tr>
         <?php
@@ -305,6 +297,18 @@ class RT_Employee_Manager_Employee_Dashboard {
      */
     private function get_employee_statistics($user_id) {
         global $wpdb;
+        
+        // Clear any relevant caches first
+        wp_cache_delete("user_meta_$user_id", 'user_meta');
+        wp_cache_delete("employee_stats_$user_id", 'rt_employee_manager');
+        
+        // Try cached version first
+        $cache_key = "employee_stats_$user_id";
+        $cached_stats = wp_cache_get($cache_key, 'rt_employee_manager');
+        
+        if ($cached_stats !== false) {
+            return $cached_stats;
+        }
         
         $stats = $wpdb->get_row($wpdb->prepare(
             "SELECT 
@@ -322,7 +326,12 @@ class RT_Employee_Manager_Employee_Dashboard {
             $user_id
         ), ARRAY_A);
         
-        return $stats ?: array('total' => 0, 'active' => 0, 'inactive' => 0, 'terminated' => 0);
+        $result = $stats ?: array('total' => 0, 'active' => 0, 'inactive' => 0, 'terminated' => 0);
+        
+        // Cache for 5 minutes
+        wp_cache_set($cache_key, $result, 'rt_employee_manager', 300);
+        
+        return $result;
     }
     
     /**
@@ -386,6 +395,18 @@ class RT_Employee_Manager_Employee_Dashboard {
         }
         
         if (update_post_meta($employee_id, 'status', $new_status)) {
+            // Clear statistics cache for the employer
+            wp_cache_delete("employee_stats_$current_user_id", 'rt_employee_manager');
+            
+            // Also update ACF field if it exists
+            if (function_exists('update_field')) {
+                update_field('status', $new_status, $employee_id);
+            }
+            
+            // Clear post meta cache
+            wp_cache_delete($employee_id, 'post_meta');
+            clean_post_cache($employee_id);
+            
             wp_send_json_success(array(
                 'message' => __('Status erfolgreich aktualisiert', 'rt-employee-manager'),
                 'status' => $new_status

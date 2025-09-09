@@ -79,13 +79,19 @@ class RT_Employee_Manager_Admin_Settings {
             wp_die(__('You do not have sufficient permissions to access this page.'));
         }
         
-        
-        // Debug: Fix missing metadata for test employee post
-        $this->fix_test_employee_metadata();
-        
         $current_user = wp_get_current_user();
         $is_admin = current_user_can('manage_options');
         $is_kunden = in_array('kunden', $current_user->roles);
+        
+        // For kunden users, redirect to the new admin dashboard or show simplified interface
+        if ($is_kunden && !$is_admin) {
+            // Redirect kunden users to the external admin dashboard
+            wp_redirect(home_url('/admin-dashboard/'));
+            exit;
+        }
+        
+        // Debug: Fix missing metadata for test employee post (admin only)
+        $this->fix_test_employee_metadata();
         
         if ($is_admin) {
             // Admin sees all data - cached for 5 minutes

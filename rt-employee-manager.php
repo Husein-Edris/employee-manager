@@ -591,9 +591,9 @@ class RT_Employee_Manager
             remove_menu_page($menu_slug);
         }
 
-        // Remove all submenus from remaining items, but keep employee-related ones
+        // Remove all submenus from remaining items, keep only rt-employee-manager
         foreach ($submenu as $parent_slug => $sub_items) {
-            if ($parent_slug !== 'rt-employee-manager' && $parent_slug !== 'edit.php?post_type=angestellte') {
+            if ($parent_slug !== 'rt-employee-manager') {
                 unset($submenu[$parent_slug]);
             }
         }
@@ -629,16 +629,17 @@ class RT_Employee_Manager
             26
         );
 
-        // Add Angestellte menu item for kunden users
-        add_menu_page(
-            __('Mitarbeiter', 'rt-employee-manager'),
-            __('Mitarbeiter', 'rt-employee-manager'),
-            'read',
-            'edit.php?post_type=angestellte',
-            '',
-            'dashicons-admin-users',
-            27
-        );
+        // Kunden users no longer get direct Mitarbeiter menu access - they use Gravity Forms
+        // Only keep this for admin reference
+        // add_menu_page(
+        //     __('Mitarbeiter', 'rt-employee-manager'),
+        //     __('Mitarbeiter', 'rt-employee-manager'),
+        //     'read',
+        //     'edit.php?post_type=angestellte',
+        //     '',
+        //     'dashicons-admin-users',
+        //     27
+        // );
 
         // Force menu rebuild
         $this->rebuild_kunden_menu();
@@ -671,16 +672,16 @@ class RT_Employee_Manager
             'dashicons-groups'
         );
 
-        // Add Angestellte submenu
-        $clean_menu[27] = array(
-            'Mitarbeiter',
-            'read',
-            'edit.php?post_type=angestellte',
-            'Mitarbeiter',
-            'menu-top',
-            'menu-angestellte',
-            'dashicons-admin-users'
-        );
+        // Kunden users no longer get Mitarbeiter menu - they use Gravity Forms instead
+        // $clean_menu[27] = array(
+        //     'Mitarbeiter',
+        //     'read',
+        //     'edit.php?post_type=angestellte',
+        //     'Mitarbeiter',
+        //     'menu-top',
+        //     'menu-angestellte',
+        //     'dashicons-admin-users'
+        // );
 
         // Add separator
         $clean_menu[79] = array(

@@ -92,7 +92,7 @@ class RT_Employee_Manager_Custom_Post_Types {
             'public' => false,
             'publicly_queryable' => false,
             'show_ui' => true,
-            'show_in_menu' => current_user_can('read'), // Allow kunden users to see menu
+            'show_in_menu' => current_user_can('manage_options'), // Only admins can see menu, kunden use Gravity Forms
             'show_in_admin_bar' => true,
             'query_var' => true,
             'rewrite' => array('slug' => 'angestellte'),

@@ -638,6 +638,23 @@ class RT_Employee_Manager_Meta_Boxes {
             update_post_meta($post_id, 'status', 'active');
         }
         
+        // Clear caches to ensure statistics and data are refreshed
+        $employer_id = get_post_meta($post_id, 'employer_id', true);
+        if ($employer_id) {
+            wp_cache_delete("employee_stats_$employer_id", 'rt_employee_manager');
+            clean_user_cache($employer_id);
+        }
+        
+        // Force refresh of post meta cache
+        wp_cache_delete($post_id, 'post_meta');
+        clean_post_cache($post_id);
+        
+        // Log successful save
+        if (get_option('rt_employee_manager_enable_logging')) {
+            $eintrittsdatum = get_post_meta($post_id, 'eintrittsdatum', true);
+            error_log("RT Employee Manager: Meta box save completed for post {$post_id}, eintrittsdatum: '$eintrittsdatum', caches cleared");
+        }
+        
         // Set employer_id logic
         $current_employer_id = get_post_meta($post_id, 'employer_id', true);
         $current_user = wp_get_current_user();

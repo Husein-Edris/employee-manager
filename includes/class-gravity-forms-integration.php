@@ -612,12 +612,33 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
         // Set default status
         update_post_meta($post_id, 'status', 'active');
         
-        // Save all employee data
+        // Save all employee data with enhanced logging and validation
         foreach ($field_mapping as $meta_key => $value) {
             if (!empty($value)) {
-                update_post_meta($post_id, $meta_key, sanitize_text_field($value));
+                // Special handling for date fields to ensure proper formatting
+                if (in_array($meta_key, ['eintrittsdatum', 'geburtsdatum'])) {
+                    // Try to parse and format date properly
+                    $date_value = $this->format_date_for_storage($value);
+                    $result = update_post_meta($post_id, $meta_key, $date_value);
+                    
+                    // Log date field saves for debugging
+                    error_log("RT Employee Manager: Saving $meta_key for post $post_id: '$value' -> '$date_value' (result: " . ($result ? 'success' : 'failed') . ")");
+                } else {
+                    $result = update_post_meta($post_id, $meta_key, sanitize_text_field($value));
+                }
+                
+                // Also update ACF field if it exists (dual compatibility)
+                if (function_exists('update_field')) {
+                    update_field($meta_key, $value, $post_id);
+                }
             }
         }
+        
+        // Ensure post is published (not draft)
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_status' => 'publish'
+        ));
         
         // Update post title with employee name
         $vorname = rgar($entry, '28');
@@ -630,11 +651,53 @@ class RT_Employee_Manager_Gravity_Forms_Integration {
             ));
         }
         
-        $this->log_success('Employee post data saved', array(
+        // Clear statistics cache for the employer
+        if ($employer_id) {
+            wp_cache_delete("employee_stats_$employer_id", 'rt_employee_manager');
+            
+            // Also clear user-specific caches
+            wp_cache_delete("user_meta_$employer_id", 'user_meta');
+            clean_user_cache($employer_id);
+        }
+        
+        // Force refresh of post meta cache
+        wp_cache_delete($post_id, 'post_meta');
+        clean_post_cache($post_id);
+        
+        $this->log_success('Employee post data saved with cache cleared', array(
             'post_id' => $post_id,
             'employer_id' => $employer_id,
-            'employee_name' => $vorname . ' ' . $nachname
+            'employee_name' => $vorname . ' ' . $nachname,
+            'eintrittsdatum' => rgar($entry, '30')
         ));
+    }
+    
+    /**
+     * Format date for consistent storage
+     */
+    private function format_date_for_storage($date_value) {
+        if (empty($date_value)) {
+            return '';
+        }
+        
+        // Try to parse various date formats and convert to Y-m-d
+        $formats = array('Y-m-d', 'd.m.Y', 'm/d/Y', 'd/m/Y', 'Y/m/d');
+        
+        foreach ($formats as $format) {
+            $date = DateTime::createFromFormat($format, $date_value);
+            if ($date !== false) {
+                return $date->format('Y-m-d');
+            }
+        }
+        
+        // If no format matches, try strtotime
+        $timestamp = strtotime($date_value);
+        if ($timestamp !== false) {
+            return date('Y-m-d', $timestamp);
+        }
+        
+        // If all else fails, return the original value
+        return $date_value;
     }
     
     private function log_error($message, $data = array()) {
@@ -1106,55 +1169,101 @@ Ihr RT Team
         <script type="text/javascript">
         jQuery(document).ready(function($) {
             <?php if ($is_kunden): ?>
-            // Hide login button for logged-in kunden users
-            $('.elementor-element-de74848').hide();
-            
-            // Show portal button if it has the class 'rt-portal-button' and is hidden
-            $('.rt-portal-button').show();
-            
-            // Replace login button with portal button
-            var portalButton = $('.rt-portal-button');
-            if (portalButton.length === 0) {
-                // Create portal button if it doesn't exist
-                var loginButton = $('.elementor-element-de74848');
-                if (loginButton.length > 0) {
-                    var portalHtml = '<div class="elementor-element elementor-element-portal rt-portal-button elementor-widget elementor-widget-button" style="display: block;">' +
-                        '<div class="elementor-widget-container">' +
-                        '<div class="elementor-button-wrapper">' +
-                        '<a class="elementor-button elementor-button-link elementor-size-sm" href="<?php echo admin_url('admin.php?page=rt-employee-manager'); ?>">' +
-                        '<span class="elementor-button-content-wrapper">' +
-                        '<span class="elementor-button-text">Mitarbeiter Portal</span>' +
-                        '</span>' +
+            // Add portal and logout buttons to the header for kunden users
+            // Enhanced selector to find header elements more reliably
+            function addPortalButtons() {
+                console.log('RT Employee Manager: Attempting to add portal buttons');
+                
+                // Multiple fallback selectors for header elements based on user's HTML structure
+                var headerSelectors = [
+                    '.elementor-element-43a6975',  // Desktop header from user's HTML
+                    '.elementor-element-5f4136c',  // Mobile header from user's HTML
+                    '[data-elementor-id="99"] .elementor-element', // Any element in header template 99
+                    '.elementor-location-header .elementor-element', // Generic header element
+                    'header .elementor-element',   // Any header element
+                    '.site-header .elementor-element' // Alternative header class
+                ];
+                
+                var headerContainer = null;
+                var foundSelector = '';
+                
+                // Try each selector until we find an element
+                for (var i = 0; i < headerSelectors.length; i++) {
+                    var elements = $(headerSelectors[i]);
+                    if (elements.length > 0) {
+                        headerContainer = elements.first();
+                        foundSelector = headerSelectors[i];
+                        console.log('RT Employee Manager: Found header element using selector:', foundSelector);
+                        break;
+                    }
+                }
+                
+                if (!headerContainer || headerContainer.length === 0) {
+                    console.log('RT Employee Manager: No suitable header container found, trying body fallback');
+                    // Fallback: append to end of body if no header found
+                    headerContainer = $('body');
+                    foundSelector = 'body (fallback)';
+                }
+                
+                // Only add if not already present
+                if ($('.rt-portal-logout-buttons').length === 0) {
+                    var buttonsHtml = '<div class="rt-portal-logout-buttons" style="position: fixed; top: 20px; right: 20px; z-index: 99999; display: flex; gap: 8px; align-items: center; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">' +
+                        '<a class="elementor-button elementor-button-link elementor-size-sm rt-portal-btn" href="/admin-dashboard/" style="background: #0073aa; color: white; text-decoration: none; padding: 8px 16px; border-radius: 4px; display: inline-block; font-size: 14px; font-weight: 500; transition: all 0.3s ease;">' +
+                        'Portal' +
                         '</a>' +
-                        '</div>' +
-                        '</div>' +
+                        '<a class="elementor-button elementor-button-link elementor-size-sm rt-logout-btn" href="<?php echo wp_logout_url(home_url()); ?>" style="background: #dc3232; color: white; text-decoration: none; padding: 8px 16px; border-radius: 4px; display: inline-block; font-size: 14px; font-weight: 500; transition: all 0.3s ease;">' +
+                        'Logout' +
+                        '</a>' +
                         '</div>';
                     
-                    loginButton.after(portalHtml);
+                    // Append to the found container (or body as fallback)
+                    headerContainer.append(buttonsHtml);
+                    
+                    console.log('RT Employee Manager: Portal buttons added to:', foundSelector);
+                    
+                    // Add hover effects
+                    $('.rt-portal-btn').hover(
+                        function() { $(this).css('background', '#005a87'); },
+                        function() { $(this).css('background', '#0073aa'); }
+                    );
+                    $('.rt-logout-btn').hover(
+                        function() { $(this).css('background', '#b32d2e'); },
+                        function() { $(this).css('background', '#dc3232'); }
+                    );
+                } else {
+                    console.log('RT Employee Manager: Portal buttons already present');
                 }
             }
             
-            // Add user info display
-            var userInfo = '<div class="rt-user-info" style="position: fixed; top: 20px; right: 20px; background: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 9999; max-width: 200px;">' +
-                '<div style="margin-bottom: 5px;"><strong>Willkommen:</strong></div>' +
-                '<div style="margin-bottom: 5px; font-size: 12px;"><?php echo esc_js($current_user->display_name); ?></div>' +
+            // Try to add buttons immediately
+            addPortalButtons();
+            
+            // Also try after a short delay in case elements are loaded dynamically
+            setTimeout(addPortalButtons, 1000);
+            setTimeout(addPortalButtons, 3000);
+            
+            // Add simplified user welcome display - just company name, no buttons (buttons are now in header)
+            var userInfo = '<div class="rt-user-info" style="position: fixed; top: 20px; right: 20px; background: #fff; padding: 12px 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 9999; max-width: 200px; cursor: pointer;">' +
+                '<div style="margin-bottom: 3px; font-size: 12px; color: #666;">Willkommen:</div>' +
                 <?php 
                 $company_name = get_user_meta($current_user->ID, 'company_name', true);
                 if ($company_name): 
                 ?>
-                '<div style="margin-bottom: 5px; font-size: 11px; color: #666;"><?php echo esc_js($company_name); ?></div>' +
+                '<div style="font-size: 14px; font-weight: bold; color: #333;"><?php echo esc_js($company_name); ?></div>' +
+                <?php else: ?>
+                '<div style="font-size: 14px; font-weight: bold; color: #333;">Test Firma</div>' +
                 <?php endif; ?>
-                '<div style="text-align: center; margin-top: 10px;">' +
-                '<a href="<?php echo admin_url('admin.php?page=rt-employee-manager'); ?>" style="text-decoration: none; background: #0073aa; color: white; padding: 5px 10px; border-radius: 3px; font-size: 11px;">Portal</a> ' +
-                '<a href="<?php echo wp_logout_url(home_url()); ?>" style="text-decoration: none; background: #dc3232; color: white; padding: 5px 10px; border-radius: 3px; font-size: 11px;">Logout</a>' +
-                '</div>' +
                 '</div>';
             
             $('body').append(userInfo);
             
-            // Make user info dismissible
+            // Auto-hide after 5 seconds
+            setTimeout(function() {
+                $('.rt-user-info').fadeOut();
+            }, 5000);
+            
+            // Make user info dismissible on click
             $('.rt-user-info').click(function(e) {
-                e.preventDefault();
                 $(this).fadeOut();
             });
             
@@ -1168,18 +1277,27 @@ Ihr RT Team
         </script>
         
         <style>
-        /* Styles for portal button */
+        /* Styles for portal and logout buttons */
         .rt-portal-button {
             display: none; /* Hidden by default, shown by JS for kunden users */
         }
         
         .rt-portal-button .elementor-button {
-            background: #28a745 !important;
-            color: white !important;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            border: none;
         }
         
-        .rt-portal-button .elementor-button:hover {
-            background: #218838 !important;
+        /* Portal button styles */
+        .rt-portal-button .elementor-button[href*="admin-dashboard"]:hover {
+            background: #005a87 !important;
+            transform: translateY(-2px);
+        }
+        
+        /* Logout button styles */
+        .rt-portal-button .elementor-button[href*="logout"]:hover {
+            background: #c32e2e !important;
+            transform: translateY(-2px);
         }
         
         /* User info styles */
