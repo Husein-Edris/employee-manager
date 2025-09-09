@@ -124,7 +124,7 @@ class RT_Employee_Manager_Employee_Dashboard
         <div class="rt-dashboard-title-section">
             <div class="rt-dashboard-actions">
                 <a href="/anmeldung-neue-r-dienstnehmer-in/"
-                    class="elementor-button elementor-button-link elementor-size-sm">
+                    class="elementor-button elementor-button-link elementor-size-sm add-employee-btn">
                     <?php _e('Neuen Mitarbeiter hinzufügen', 'rt-employee-manager'); ?>
                 </a>
             </div>
@@ -360,7 +360,7 @@ class RT_Employee_Manager_Employee_Dashboard
                 COUNT(*) as total,
                 SUM(CASE WHEN COALESCE(pm_status.meta_value, 'active') = 'active' THEN 1 ELSE 0 END) as active,
                 SUM(CASE WHEN pm_status.meta_value = 'inactive' THEN 1 ELSE 0 END) as inactive,
-                SUM(CASE WHEN pm_status.meta_value = 'terminated' THEN 1 ELSE 0 END) as terminated
+                SUM(CASE WHEN pm_status.meta_value = 'terminated' THEN 1 ELSE 0 END) as term_count
              FROM {$wpdb->postmeta} pm_employer
              INNER JOIN {$wpdb->posts} p ON pm_employer.post_id = p.ID
              LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = 'status'
@@ -371,7 +371,12 @@ class RT_Employee_Manager_Employee_Dashboard
             $user_id
         ), ARRAY_A);
 
-        $result = $stats ?: array('total' => 0, 'active' => 0, 'inactive' => 0, 'terminated' => 0);
+        $result = $stats ? array(
+            'total' => $stats['total'],
+            'active' => $stats['active'], 
+            'inactive' => $stats['inactive'],
+            'terminated' => $stats['term_count']
+        ) : array('total' => 0, 'active' => 0, 'inactive' => 0, 'terminated' => 0);
 
         // Cache for 5 minutes
         wp_cache_set($cache_key, $result, 'rt_employee_manager', 300);
@@ -401,8 +406,15 @@ class RT_Employee_Manager_Employee_Dashboard
         }
 
         if (wp_delete_post($employee_id, true)) {
+            // Clear statistics cache
+            wp_cache_delete("employee_stats_$current_user_id", 'rt_employee_manager');
+            
+            // Get updated statistics
+            $updated_stats = $this->get_employee_statistics($current_user_id);
+            
             wp_send_json_success(array(
-                'message' => __('Mitarbeiter erfolgreich gelöscht', 'rt-employee-manager')
+                'message' => __('Mitarbeiter erfolgreich gelöscht', 'rt-employee-manager'),
+                'stats' => $updated_stats
             ));
         } else {
             wp_send_json_error(array(
@@ -454,9 +466,13 @@ class RT_Employee_Manager_Employee_Dashboard
             wp_cache_delete($employee_id, 'post_meta');
             clean_post_cache($employee_id);
 
+            // Get updated statistics
+            $updated_stats = $this->get_employee_statistics($current_user_id);
+            
             wp_send_json_success(array(
                 'message' => __('Status erfolgreich aktualisiert', 'rt-employee-manager'),
-                'status' => $new_status
+                'status' => $new_status,
+                'stats' => $updated_stats
             ));
         } else {
             wp_send_json_error(array(

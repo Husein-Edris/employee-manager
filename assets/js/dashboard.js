@@ -49,8 +49,14 @@ jQuery(document).ready(function($) {
                         $row.removeClass('status-active status-inactive status-suspended status-terminated');
                         $row.addClass('status-' + newStatus);
                         
+                        // Update statistics with server data
+                        if (response.data.stats) {
+                            updateStatisticsWithData(response.data.stats);
+                        } else {
+                            updateStatistics();
+                        }
+                        
                         showNotification(response.data.message, 'success');
-                        updateStatistics();
                     } else {
                         showNotification(response.data.message || rtEmployeeDashboard.strings.error, 'error');
                         // Revert selection
@@ -292,7 +298,13 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     $row.fadeOut(300, function() {
                         $(this).remove();
-                        updateStatistics();
+                        
+                        // Update statistics with server data
+                        if (response.data.stats) {
+                            updateStatisticsWithData(response.data.stats);
+                        } else {
+                            updateStatistics();
+                        }
                         
                         // Check if table is empty
                         if ($('.rt-employee-table tbody tr').length === 0) {
@@ -376,20 +388,32 @@ jQuery(document).ready(function($) {
             terminated: $('.employee-row.status-terminated').length
         };
         
+        updateStatisticsWithData(stats);
+    }
+    
+    // Update statistics with provided data
+    function updateStatisticsWithData(stats) {
         // Update stat cards
         $('.rt-stat-card').each(function() {
             const $card = $(this);
             const text = $card.find('p').text().toLowerCase();
             
             if (text.includes('gesamt')) {
-                $card.find('h3').text(stats.total);
-            } else if (text.includes('aktiv')) {
-                $card.find('h3').text(stats.active);
-            } else if (text.includes('inaktiv')) {
-                $card.find('h3').text(stats.inactive);
-            } else if (text.includes('gekündigt')) {
-                $card.find('h3').text(stats.terminated);
+                $card.find('h3').text(stats.total || 0);
+            } else if (text.includes('beschäftigt') || text.includes('aktiv')) {
+                $card.find('h3').text(stats.active || 0);
+            } else if (text.includes('beurlaubt') || text.includes('inaktiv')) {
+                $card.find('h3').text(stats.inactive || 0);
+            } else if (text.includes('ausgeschieden') || text.includes('gekündigt') || text.includes('terminated')) {
+                $card.find('h3').text(stats.terminated || 0);
             }
+        });
+        
+        // Add animation effect
+        $('.rt-stat-card h3').each(function() {
+            $(this).addClass('updated').delay(500).queue(function() {
+                $(this).removeClass('updated').dequeue();
+            });
         });
     }
     
