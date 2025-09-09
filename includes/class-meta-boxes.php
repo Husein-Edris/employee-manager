@@ -49,14 +49,14 @@ class RT_Employee_Manager_Meta_Boxes {
         wp_nonce_field('rt_employee_meta_box', 'rt_employee_meta_box_nonce');
         
         // Get existing values and clean placeholder data
-        // Try ACF fields first, then fallback to regular meta
-        $anrede = function_exists('get_field') ? get_field('anrede', $post->ID) : get_post_meta($post->ID, 'anrede', true);
-        $vorname = function_exists('get_field') ? get_field('vorname', $post->ID) : get_post_meta($post->ID, 'vorname', true);
-        $nachname = function_exists('get_field') ? get_field('nachname', $post->ID) : get_post_meta($post->ID, 'nachname', true);
-        $svnr = function_exists('get_field') ? get_field('sozialversicherungsnummer', $post->ID) : get_post_meta($post->ID, 'sozialversicherungsnummer', true);
-        $geburtsdatum = function_exists('get_field') ? get_field('geburtsdatum', $post->ID) : get_post_meta($post->ID, 'geburtsdatum', true);
-        $staatsangehoerigkeit = function_exists('get_field') ? get_field('staatsangehoerigkeit', $post->ID) : get_post_meta($post->ID, 'staatsangehoerigkeit', true);
-        $email = function_exists('get_field') ? get_field('email', $post->ID) : get_post_meta($post->ID, 'email', true);
+        // Try both ACF fields and regular meta, use whichever has data
+        $anrede = $this->get_field_value($post->ID, 'anrede');
+        $vorname = $this->get_field_value($post->ID, 'vorname');
+        $nachname = $this->get_field_value($post->ID, 'nachname');
+        $svnr = $this->get_field_value($post->ID, 'sozialversicherungsnummer');
+        $geburtsdatum = $this->get_field_value($post->ID, 'geburtsdatum');
+        $staatsangehoerigkeit = $this->get_field_value($post->ID, 'staatsangehoerigkeit');
+        $email = $this->get_field_value($post->ID, 'email');
         
         // Clean placeholder data - only remove obviously fake/test data
         $placeholder_patterns = array('test', 'placeholder', 'example', 'dummy', 'sample');
@@ -78,19 +78,19 @@ class RT_Employee_Manager_Meta_Boxes {
         if (in_array(strtolower($staatsangehoerigkeit), array('automatisch', 'gespeicherter', 'test', 'placeholder'))) {
             $staatsangehoerigkeit = '';
         }
-        $adresse = function_exists('get_field') ? get_field('adresse', $post->ID) : get_post_meta($post->ID, 'adresse', true);
-        $personenstand = function_exists('get_field') ? get_field('personenstand', $post->ID) : get_post_meta($post->ID, 'personenstand', true);
-        $eintrittsdatum = function_exists('get_field') ? get_field('eintrittsdatum', $post->ID) : get_post_meta($post->ID, 'eintrittsdatum', true);
-        $bezeichnung_der_tatigkeit = function_exists('get_field') ? get_field('bezeichnung_der_tatigkeit', $post->ID) : get_post_meta($post->ID, 'bezeichnung_der_tatigkeit', true);
-        $art_des_dienstverhaltnisses = function_exists('get_field') ? get_field('art_des_dienstverhaltnisses', $post->ID) : get_post_meta($post->ID, 'art_des_dienstverhaltnisses', true);
-        $arbeitszeit_pro_woche = function_exists('get_field') ? get_field('arbeitszeit_pro_woche', $post->ID) : get_post_meta($post->ID, 'arbeitszeit_pro_woche', true);
-        $arbeitstagen = function_exists('get_field') ? get_field('arbeitstagen', $post->ID) : get_post_meta($post->ID, 'arbeitstagen', true);
-        $gehaltlohn = function_exists('get_field') ? get_field('gehaltlohn', $post->ID) : get_post_meta($post->ID, 'gehaltlohn', true);
-        $type = function_exists('get_field') ? get_field('type', $post->ID) : get_post_meta($post->ID, 'type', true);
-        $employer_id = function_exists('get_field') ? get_field('employer_id', $post->ID) : get_post_meta($post->ID, 'employer_id', true);
-        $status = function_exists('get_field') ? get_field('status', $post->ID) : get_post_meta($post->ID, 'status', true);
+        $adresse = $this->get_field_value($post->ID, 'adresse');
+        $personenstand = $this->get_field_value($post->ID, 'personenstand');
+        $eintrittsdatum = $this->get_field_value($post->ID, 'eintrittsdatum');
+        $bezeichnung_der_tatigkeit = $this->get_field_value($post->ID, 'bezeichnung_der_tatigkeit');
+        $art_des_dienstverhaltnisses = $this->get_field_value($post->ID, 'art_des_dienstverhaltnisses');
+        $arbeitszeit_pro_woche = $this->get_field_value($post->ID, 'arbeitszeit_pro_woche');
+        $arbeitstagen = $this->get_field_value($post->ID, 'arbeitstagen');
+        $gehaltlohn = $this->get_field_value($post->ID, 'gehaltlohn');
+        $type = $this->get_field_value($post->ID, 'type');
+        $employer_id = $this->get_field_value($post->ID, 'employer_id');
+        $status = $this->get_field_value($post->ID, 'status');
         $status = $status ?: 'active';
-        $anmerkungen = function_exists('get_field') ? get_field('anmerkungen', $post->ID) : get_post_meta($post->ID, 'anmerkungen', true);
+        $anmerkungen = $this->get_field_value($post->ID, 'anmerkungen');
         
         // Default address structure
         if (!is_array($adresse)) {
@@ -497,6 +497,8 @@ class RT_Employee_Manager_Meta_Boxes {
         foreach ($fields as $field) {
             if (isset($_POST[$field]) && $_POST[$field] !== '') {
                 $value = sanitize_text_field($_POST[$field]);
+                
+                // Update both post meta and ACF field to ensure consistency
                 update_post_meta($post_id, $field, $value);
                 
                 // Also update ACF field if ACF is available
@@ -509,12 +511,18 @@ class RT_Employee_Manager_Meta_Boxes {
                     error_log("RT Employee Manager: Saved meta {$field} = {$value} for post {$post_id}");
                 }
             } elseif (isset($_POST[$field]) && $_POST[$field] === '') {
-                // Delete empty values to prevent storing empty strings
-                delete_post_meta($post_id, $field);
+                // For empty values, keep the field but set it to empty
+                // This prevents issues with required field validation
+                update_post_meta($post_id, $field, '');
                 
-                // Also delete ACF field if available
-                if (function_exists('delete_field')) {
-                    delete_field($field, $post_id);
+                // Also update ACF field if available
+                if (function_exists('update_field')) {
+                    update_field($field, '', $post_id);
+                }
+                
+                // Debug logging
+                if (get_option('rt_employee_manager_enable_logging')) {
+                    error_log("RT Employee Manager: Cleared field {$field} for post {$post_id}");
                 }
             }
         }
@@ -523,14 +531,37 @@ class RT_Employee_Manager_Meta_Boxes {
         if (isset($_POST['adresse']) && is_array($_POST['adresse'])) {
             $address = array_map('sanitize_text_field', $_POST['adresse']);
             update_post_meta($post_id, 'adresse', $address);
+            
+            // Also update ACF field
+            if (function_exists('update_field')) {
+                update_field('adresse', $address, $post_id);
+            }
+            
+            if (get_option('rt_employee_manager_enable_logging')) {
+                error_log("RT Employee Manager: Saved address data for post {$post_id}");
+            }
         }
         
         // Handle working days array
         if (isset($_POST['arbeitstagen']) && is_array($_POST['arbeitstagen'])) {
             $days = array_map('sanitize_text_field', $_POST['arbeitstagen']);
             update_post_meta($post_id, 'arbeitstagen', $days);
+            
+            // Also update ACF field
+            if (function_exists('update_field')) {
+                update_field('arbeitstagen', $days, $post_id);
+            }
+            
+            if (get_option('rt_employee_manager_enable_logging')) {
+                error_log("RT Employee Manager: Saved working days for post {$post_id}: " . implode(', ', $days));
+            }
         } else {
             update_post_meta($post_id, 'arbeitstagen', array());
+            
+            // Also update ACF field
+            if (function_exists('update_field')) {
+                update_field('arbeitstagen', array(), $post_id);
+            }
         }
         
         // Update post title with employee name and ensure it's published
@@ -879,5 +910,36 @@ class RT_Employee_Manager_Meta_Boxes {
                 update_post_meta($post_id, 'employer_id', $current_user->ID);
             }
         }
+    }
+    
+    /**
+     * Helper method to get field value from both ACF and post meta
+     * This ensures backward compatibility and data display consistency
+     */
+    private function get_field_value($post_id, $field_name) {
+        $value = '';
+        
+        // First try ACF if available
+        if (function_exists('get_field')) {
+            $acf_value = get_field($field_name, $post_id);
+            if (!empty($acf_value)) {
+                $value = $acf_value;
+            }
+        }
+        
+        // If no ACF value or ACF not available, try post meta
+        if (empty($value)) {
+            $meta_value = get_post_meta($post_id, $field_name, true);
+            if (!empty($meta_value)) {
+                $value = $meta_value;
+            }
+        }
+        
+        // Debug logging for troubleshooting
+        if (get_option('rt_employee_manager_enable_logging') && !empty($value)) {
+            error_log("RT Employee Manager: Retrieved field '{$field_name}' for post {$post_id}: " . (is_array($value) ? json_encode($value) : $value));
+        }
+        
+        return $value;
     }
 }
