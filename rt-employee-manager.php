@@ -4,7 +4,7 @@
  * Plugin Name: RT Employee Manager
  * Plugin URI: https://edrishusein.com
  * Description: Professional employee management system with Gravity Forms integration, native WordPress meta boxes, and Austrian SVNR validation
- * Version: 3.2.0
+ * Version: 4.1
  * Author: Edris Husein
  * Text Domain: rt-employee-manager
  * Domain Path: /languages
@@ -1092,47 +1092,52 @@ add_action('admin_notices', function() {
     }
     
     ?>
-    <div class="notice notice-info is-dismissible" id="rt-sample-data-notice">
-        <p><strong>RT Employee Manager:</strong> No employees found. Would you like to create sample data for demonstration?</p>
-        <p>
-            <button type="button" class="button button-primary" id="rt-create-sample-btn">Create Sample Data</button>
-            <button type="button" class="button button-secondary" onclick="jQuery('#rt-sample-data-notice').slideUp()">Dismiss</button>
-        </p>
-    </div>
-    
-    <script>
-    jQuery(document).ready(function($) {
-        $('#rt-create-sample-btn').on('click', function() {
-            const btn = $(this);
-            btn.prop('disabled', true).text('Creating...');
-            
-            $.ajax({
-                url: ajaxurl,
-                type: 'POST',
-                data: {
-                    action: 'rt_create_sample_data',
-                    nonce: '<?php echo wp_create_nonce('rt_sample_data'); ?>'
-                },
-                success: function(response) {
-                    if (response.success) {
-                        $('#rt-sample-data-notice').html('<p style="color: green;"><strong>Success!</strong> Sample data created. Refreshing page...</p>');
-                        setTimeout(function() {
-                            location.reload();
-                        }, 1500);
-                    } else {
-                        btn.prop('disabled', false).text('Create Sample Data');
-                        alert('Error creating sample data: ' + (response.data.message || 'Unknown error'));
-                    }
-                },
-                error: function() {
+<div class="notice notice-info is-dismissible" id="rt-sample-data-notice">
+    <p><strong>RT Employee Manager:</strong> No employees found. Would you like to create sample data for demonstration?
+    </p>
+    <p>
+        <button type="button" class="button button-primary" id="rt-create-sample-btn">Create Sample Data</button>
+        <button type="button" class="button button-secondary"
+            onclick="jQuery('#rt-sample-data-notice').slideUp()">Dismiss</button>
+    </p>
+</div>
+
+<script>
+jQuery(document).ready(function($) {
+    $('#rt-create-sample-btn').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).text('Creating...');
+
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'rt_create_sample_data',
+                nonce: '<?php echo wp_create_nonce('rt_sample_data'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#rt-sample-data-notice').html(
+                        '<p style="color: green;"><strong>Success!</strong> Sample data created. Refreshing page...</p>'
+                    );
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1500);
+                } else {
                     btn.prop('disabled', false).text('Create Sample Data');
-                    alert('Ajax error occurred');
+                    alert('Error creating sample data: ' + (response.data.message ||
+                        'Unknown error'));
                 }
-            });
+            },
+            error: function() {
+                btn.prop('disabled', false).text('Create Sample Data');
+                alert('Ajax error occurred');
+            }
         });
     });
-    </script>
-    <?php
+});
+</script>
+<?php
 });
 
 if (is_plugin_active(plugin_basename(__FILE__))) {
