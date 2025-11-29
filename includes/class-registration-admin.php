@@ -496,56 +496,18 @@ class RT_Employee_Manager_Registration_Admin
         }
 
         try {
-            // Check if user was already created by the form AND it's not an admin user
-            if (!empty($registration->created_user_id)) {
-                $user_id = $registration->created_user_id;
-                $user = get_user_by('ID', $user_id);
+            // Simply create kunde post for existing user (Gravity Forms already created the user)
+            $result = $this->create_approved_client($registration);
 
-                // Only use existing user if it's not an administrator (avoid using admin account)
-                if ($user && !in_array('administrator', $user->roles) && $user->user_email === $registration->company_email) {
-                    // User already exists and is not admin, just approve and create kunde post
-
-                    // Ensure user has correct role
-                    if (!in_array('kunden', $user->roles)) {
-                        $user->set_role('kunden');
-                    }
-
-                    // Create kunde post if it doesn't exist
-                    $kunde_post_id = get_user_meta($user_id, 'kunde_post_id', true);
-                    if (!$kunde_post_id) {
-                        $kunde_post_id = $this->create_kunde_post_for_existing_user($user_id, $registration);
-                    }
-
-                    // Update user meta with company information
-                    $this->update_user_meta_from_registration($user_id, $registration);
-
-                    $result = array(
-                        'user_id' => $user_id,
-                        'post_id' => $kunde_post_id,
-                        'password' => null // User already has password
-                    );
-                } else {
-                    // Admin user or email mismatch - create new user instead
-                    $result = $this->create_approved_client($registration);
-
-                    if (is_wp_error($result)) {
-                        wp_send_json_error(array('message' => $result->get_error_message()));
-                    }
-                }
-            } else {
-                // Create new WordPress user and kunde post
-                $result = $this->create_approved_client($registration);
-
-                if (is_wp_error($result)) {
-                    wp_send_json_error(array('message' => $result->get_error_message()));
-                }
+            if (is_wp_error($result)) {
+                wp_send_json_error(array('message' => $result->get_error_message()));
             }
 
             // Update registration status
             $this->update_registration_status($registration_id, 'approved');
 
-            // Send approval email
-            $this->send_approval_email($registration, $result);
+            // Send simple approval notification (WordPress already sent password email)
+            $this->send_approval_notification($registration, $result);
 
             wp_send_json_success(array(
                 'message' => __('Registration approved successfully. Approval email sent.', 'rt-employee-manager')
@@ -639,103 +601,48 @@ class RT_Employee_Manager_Registration_Admin
     }
 
     /**
-     * Create approved client (user + kunde post)
+     * Create kunde post for approved user (user already exists via Gravity Forms)
      */
     private function create_approved_client($registration)
     {
-        // Generate user-friendly password (no confusing characters)
-        $password = wp_generate_password(12, false, false); // No special chars, easier to type
+        // Find existing user by email (created by Gravity Forms)
+        $user = get_user_by('email', $registration->company_email);
         
-        rt_employee_debug()->info('Creating new company user', [
-            'email' => $registration->company_email,
-            'company_name' => $registration->company_name,
-            'password_length' => strlen($password)
-        ], ['type' => 'user_creation']);
-
-        // Check if user already exists
-        if (email_exists($registration->company_email)) {
-            rt_employee_debug()->warning('User creation failed - email exists', [
-                'email' => $registration->company_email
-            ]);
-            return new WP_Error('user_exists', __('A user with this email already exists.', 'rt-employee-manager'));
-        }
-
-        // Create WordPress user
-        $user_data = array(
-            'user_login' => sanitize_user($registration->company_email),
-            'user_email' => $registration->company_email,
-            'user_pass' => $password,
-            'first_name' => $registration->contact_first_name,
-            'last_name' => $registration->contact_last_name,
-            'display_name' => $registration->company_name,
-            'role' => 'kunden',
-            'send_user_notification' => true // Let WordPress send the notification
-        );
-
-        $user_id = wp_insert_user($user_data);
-
-        if (is_wp_error($user_id)) {
-            rt_employee_debug()->error('User creation failed', [
+        if (!$user) {
+            rt_employee_debug()->error('No user found for approved registration', [
                 'email' => $registration->company_email,
-                'error' => $user_id->get_error_message()
-            ], ['type' => 'user_creation_error']);
-            return $user_id;
+                'registration_id' => $registration->id
+            ], ['type' => 'approval_error']);
+            return new WP_Error('user_not_found', __('User account not found. Please ensure the user was created via the registration form.', 'rt-employee-manager'));
         }
         
-        rt_employee_debug()->info('User created successfully', [
+        $user_id = $user->ID;
+        
+        rt_employee_debug()->info('Found existing user for approval', [
             'user_id' => $user_id,
             'email' => $registration->company_email
-        ], ['type' => 'user_creation_success']);
+        ], ['type' => 'approval_process']);
 
-        // Add user meta
-        $user_meta = array(
-            'company_name' => $registration->company_name,
-            'uid_number' => $registration->uid_number,
-            'phone' => $registration->company_phone,
-            'address_street' => $registration->company_street,
-            'address_postcode' => $registration->company_postcode,
-            'address_city' => $registration->company_city,
-            'address_country' => $registration->company_country
-        );
-
-        foreach ($user_meta as $key => $value) {
-            if (!empty($value)) {
-                update_user_meta($user_id, $key, $value);
-            }
+        // Ensure user has correct role
+        if (!in_array('kunden', $user->roles)) {
+            $user->set_role('kunden');
+            rt_employee_debug()->info('Updated user role to kunden', ['user_id' => $user_id]);
         }
+
+        // Add/update user meta with company information
+        $this->update_user_meta_from_registration($user_id, $registration);
 
         // Create kunde post
-        $post_data = array(
-            'post_title' => $registration->company_name,
-            'post_type' => 'kunde',
-            'post_status' => 'publish',
-            'post_author' => $user_id,
-            'meta_input' => array(
-                'company_name' => $registration->company_name,
-                'uid_number' => $registration->uid_number,
-                'phone' => $registration->company_phone,
-                'email' => $registration->company_email,
-                'registration_date' => current_time('d.m.Y H:i'),
-                'user_id' => $user_id,
-                'approved_from_registration' => $registration->id
-            )
-        );
-
-        $post_id = wp_insert_post($post_data);
-
-        if (is_wp_error($post_id)) {
-            // Clean up user if post creation failed
-            wp_delete_user($user_id);
-            return $post_id;
+        $post_id = $this->create_kunde_post_for_existing_user($user_id, $registration);
+        
+        if (!$post_id) {
+            return new WP_Error('post_creation_failed', __('Failed to create company record.', 'rt-employee-manager'));
         }
-
-        // Link user to kunde post
-        update_user_meta($user_id, 'kunde_post_id', $post_id);
 
         return array(
             'user_id' => $user_id,
             'post_id' => $post_id,
-            'password' => $password
+            'password' => null // WordPress handles passwords
         );
     }
 
@@ -800,65 +707,25 @@ class RT_Employee_Manager_Registration_Admin
     }
 
     /**
-     * Send approval email
+     * Send simple approval notification (WordPress handles passwords)
      */
-    private function send_approval_email($registration, $result)
+    private function send_approval_notification($registration, $result)
     {
-        // Generate secure login URL that bypasses password requirement
-        $secure_login_url = RT_Employee_Manager_Login_Redirect::generate_secure_login_url($result['user_id'], 72); // 72 hours
-        $regular_login_url = wp_login_url();
+        $login_url = wp_login_url();
+        $dashboard_url = home_url('/admin-dashboard/');
 
-        $subject = sprintf(__('[%s] Konto genehmigt - Willkommen!', 'rt-employee-manager'), get_bloginfo('name'));
+        $subject = sprintf(__('[%s] Unternehmensregistrierung genehmigt!', 'rt-employee-manager'), get_bloginfo('name'));
 
-        if (!empty($result['password'])) {
-            // New account with generated password
-            $message = sprintf(
-                __('
+        $message = sprintf(
+            __('
 Hallo %s,
 
 Großartige Neuigkeiten! Ihre Unternehmensregistrierung für %s wurde genehmigt!
 
-Sie können sofort auf Ihr Mitarbeiterverwaltungs-Dashboard zugreifen, indem Sie diesen sicheren Link verwenden:
+Sie können sich jetzt mit Ihren Anmeldedaten einloggen:
 %s
 
-Dieser sichere Link ist 72 Stunden gültig. Danach können Sie sich normal anmelden mit:
-- E-Mail: %s
-- Passwort: %s
-- Anmelde-URL: %s
-
-Was Sie als nächstes tun können:
-✓ Ihre Mitarbeiter zum System hinzufügen
-✓ Mitarbeiterdatensätze und Status verwalten
-✓ Aktive und inaktive Mitarbeiter verfolgen
-✓ Ihre Unternehmensinformationen aktualisieren
-
-Benötigen Sie Hilfe beim Einstieg? Antworten Sie auf diese E-Mail und wir helfen Ihnen gerne.
-
-Willkommen bei %s!
-
----
-Diese E-Mail wurde automatisch generiert.
-', 'rt-employee-manager'),
-                $registration->contact_first_name,
-                $registration->company_name,
-                $secure_login_url,
-                $registration->company_email,
-                $result['password'],
-                $regular_login_url,
-                get_bloginfo('name')
-            );
-        } else {
-            // Existing account, no password needed
-            $message = sprintf(
-                __('
-Hallo %s,
-
-Großartige Neuigkeiten! Ihre Unternehmensregistrierung für %s wurde genehmigt!
-
-Sie können sofort auf Ihr Mitarbeiterverwaltungs-Dashboard zugreifen, indem Sie diesen sicheren Link verwenden:
-%s
-
-Dieser sichere Link ist 72 Stunden gültig. Danach können Sie sich normal mit Ihren bestehenden Anmeldedaten anmelden unter:
+Ihr Mitarbeiterverwaltungs-Dashboard finden Sie hier:
 %s
 
 Was Sie als nächstes tun können:
@@ -874,89 +741,24 @@ Willkommen bei %s!
 ---
 Diese E-Mail wurde automatisch generiert.
 ', 'rt-employee-manager'),
-                $registration->contact_first_name,
-                $registration->company_name,
-                $secure_login_url,
-                $regular_login_url,
-                get_bloginfo('name')
-            );
-        }
+            $registration->contact_first_name,
+            $registration->company_name,
+            $login_url,
+            $dashboard_url,
+            get_bloginfo('name')
+        );
 
         // Send the email
         $email_sent = wp_mail($registration->company_email, $subject, $message);
         
         // Log email attempt
-        rt_employee_debug()->info('Approval email sent', [
+        rt_employee_debug()->info('Approval notification sent', [
             'to_email' => $registration->company_email,
             'subject' => $subject,
-            'email_sent' => $email_sent,
-            'has_password' => !empty($result['password'])
+            'email_sent' => $email_sent
         ], ['type' => 'email_delivery']);
         
-        // If email failed and this is a new user, let WordPress handle the password reset
-        if (!$email_sent && !empty($result['password'])) {
-            rt_employee_debug()->warning('Email failed, triggering WordPress password reset', [
-                'user_id' => $result['user_id']
-            ]);
-            
-            // Use WordPress built-in password reset
-            $this->trigger_wordpress_password_reset($result['user_id']);
-        }
-        
         return $email_sent;
-    }
-    
-    /**
-     * Trigger WordPress built-in password reset as fallback
-     */
-    private function trigger_wordpress_password_reset($user_id)
-    {
-        $user = get_user_by('ID', $user_id);
-        if (!$user) {
-            return false;
-        }
-        
-        rt_employee_debug()->info('Triggering WordPress password reset', [
-            'user_id' => $user_id,
-            'user_email' => $user->user_email
-        ], ['type' => 'password_reset_fallback']);
-        
-        // Generate password reset key
-        $key = get_password_reset_key($user);
-        if (is_wp_error($key)) {
-            rt_employee_debug()->error('Failed to generate password reset key', [
-                'user_id' => $user_id,
-                'error' => $key->get_error_message()
-            ]);
-            return false;
-        }
-        
-        // Create custom reset email for company users
-        $reset_url = network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user->user_login), 'login');
-        
-        $subject = sprintf('[%s] Password Reset Required', get_bloginfo('name'));
-        $message = sprintf('
-Hello %s,
-
-Your company account has been approved, but we encountered an issue sending your login credentials.
-
-Please use this link to set your password:
-%s
-
-This link will expire in 24 hours for security reasons.
-
-If you need assistance, please contact the administrator at %s
-
-Best regards,
-%s Team
-        ',
-            $user->display_name ?: $user->first_name,
-            $reset_url,
-            get_option('admin_email'),
-            get_bloginfo('name')
-        );
-        
-        return wp_mail($user->user_email, $subject, $message);
     }
 
     /**
