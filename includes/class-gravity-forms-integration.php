@@ -592,23 +592,32 @@ class RT_Employee_Manager_Gravity_Forms_Integration
 
         // Field mapping for employee data (using German field names to match meta boxes)
         // We'll try to auto-detect field IDs if the hardcoded ones don't work
+        // Dynamic field mapping - try multiple field IDs and labels
         $field_mapping = array(
-            'vorname' => $this->get_field_value_from_entry($entry, array('28', 'vorname', 'first_name', 'firstname')),
-            'nachname' => $this->get_field_value_from_entry($entry, array('27', 'nachname', 'last_name', 'lastname')),
-            'sozialversicherungsnummer' => $this->get_field_value_from_entry($entry, array('53', 'svnr', 'sozialversicherungsnummer')),
-            'email' => $this->get_field_value_from_entry($entry, array('26', 'email')),
-            'telefon' => $this->get_field_value_from_entry($entry, array('25', 'telefon', 'phone')),
-            'geburtsdatum' => $this->get_field_value_from_entry($entry, array('29', 'geburtsdatum', 'birth_date')),
-            'eintrittsdatum' => $this->get_field_value_from_entry($entry, array('35', 'eintrittsdatum', 'entry_date', 'hire_date')),
-            'bezeichnung_der_tatigkeit' => $this->get_field_value_from_entry($entry, array('37', 'position', 'job_title', 'bezeichnung_der_tatigkeit', 'anmerkungen')),
-            'abteilung' => $this->get_field_value_from_entry($entry, array('32', 'abteilung', 'department')),
-            'gehaltlohn' => $this->get_field_value_from_entry($entry, array('33', 'gehalt', 'salary', 'lohn')),
-            'art_des_dienstverhaltnisses' => $this->get_field_value_from_entry($entry, array('34', 'employment_type')),
-            'staatsangehoerigkeit' => $this->get_field_value_from_entry($entry, array('38', 'nationality')),
-            'personenstand' => $this->get_field_value_from_entry($entry, array('39', 'marital_status')),
-            'arbeitszeit_pro_woche' => $this->get_field_value_from_entry($entry, array('40', 'working_hours')),
-            'anmerkungen' => $this->get_field_value_from_entry($entry, array('37', 'notes', 'anmerkungen'))
+            'vorname' => $this->get_field_value_from_entry($entry, array('28', '1.3', '2.3', 'vorname', 'first_name', 'firstname')),
+            'nachname' => $this->get_field_value_from_entry($entry, array('27', '1.6', '2.6', 'nachname', 'last_name', 'lastname')),
+            'sozialversicherungsnummer' => $this->get_field_value_from_entry($entry, array('53', '3', '4', '5', 'svnr', 'sozialversicherungsnummer', 'social_security')),
+            'email' => $this->get_field_value_from_entry($entry, array('26', '6', '7', '8', 'email', 'e_mail')),
+            'telefon' => $this->get_field_value_from_entry($entry, array('25', '9', '10', '11', 'telefon', 'phone', 'telephone')),
+            'geburtsdatum' => $this->get_field_value_from_entry($entry, array('29', '12', '13', '14', 'geburtsdatum', 'birth_date', 'birthdate')),
+            'eintrittsdatum' => $this->get_field_value_from_entry($entry, array('35', '15', '16', '17', 'eintrittsdatum', 'entry_date', 'hire_date', 'start_date')),
+            'bezeichnung_der_tatigkeit' => $this->get_field_value_from_entry($entry, array('37', '18', '19', '20', 'position', 'job_title', 'bezeichnung_der_tatigkeit')),
+            'abteilung' => $this->get_field_value_from_entry($entry, array('32', '21', '22', '23', 'abteilung', 'department')),
+            'gehaltlohn' => $this->get_field_value_from_entry($entry, array('33', '24', '25', '26', 'gehalt', 'salary', 'lohn', 'wage')),
+            'art_des_dienstverhaltnisses' => $this->get_field_value_from_entry($entry, array('34', '27', '28', '29', 'employment_type', 'job_type')),
+            'staatsangehoerigkeit' => $this->get_field_value_from_entry($entry, array('38', '30', '31', '32', 'nationality', 'citizenship')),
+            'personenstand' => $this->get_field_value_from_entry($entry, array('39', '33', '34', '35', 'marital_status', 'family_status')),
+            'arbeitszeit_pro_woche' => $this->get_field_value_from_entry($entry, array('40', '36', '37', '38', 'working_hours', 'hours_per_week')),
+            'anmerkungen' => $this->get_field_value_from_entry($entry, array('37', '39', '40', '50', 'notes', 'anmerkungen', 'comments'))
         );
+        
+        // Log what we found
+        rt_employee_debug()->info('Gravity Form field mapping results', [
+            'entry_id' => $entry['id'],
+            'form_id' => $entry['form_id'],
+            'mapped_fields' => array_filter($field_mapping), // Only show fields that have values
+            'all_entry_data' => $entry // Full entry data for debugging
+        ], ['type' => 'gravity_form_mapping']);
 
         // Handle address as array structure (as expected by meta box)
         $address_street = rgar($entry, '35.1');
@@ -786,7 +795,21 @@ class RT_Employee_Manager_Gravity_Forms_Integration
      */
     public function handle_company_approval()
     {
+        rt_employee_debug()->info('Company approval request started', [
+            'user_id' => $_POST['user_id'] ?? 'missing',
+            'nonce' => $_POST['nonce'] ?? 'missing',
+            'admin_user' => get_current_user_id(),
+            'post_data' => $_POST
+        ], ['type' => 'company_approval']);
+
+        // CRITICAL SECURITY FIX: Add CSRF protection
+        check_ajax_referer('rt_company_action', 'nonce');
+
         if (!current_user_can('manage_options')) {
+            rt_employee_debug()->security('Unauthorized company approval attempt', [
+                'user_id' => get_current_user_id(),
+                'attempted_action' => 'company_approval'
+            ]);
             wp_die('Unauthorized');
         }
 
@@ -794,8 +817,17 @@ class RT_Employee_Manager_Gravity_Forms_Integration
         $user = get_user_by('ID', $user_id);
 
         if (!$user) {
+            rt_employee_debug()->error('Company approval failed - user not found', [
+                'user_id' => $user_id
+            ]);
             wp_die('User not found');
         }
+
+        rt_employee_debug()->info('Approving company user', [
+            'user_id' => $user_id,
+            'user_email' => $user->user_email,
+            'approved_by' => get_current_user_id()
+        ]);
 
         // Update user status to active
         update_user_meta($user_id, 'account_status', 'active');
@@ -811,7 +843,21 @@ class RT_Employee_Manager_Gravity_Forms_Integration
      */
     public function handle_company_rejection()
     {
+        rt_employee_debug()->info('Company rejection request started', [
+            'user_id' => $_POST['user_id'] ?? 'missing',
+            'reason' => $_POST['reason'] ?? 'missing',
+            'nonce' => $_POST['nonce'] ?? 'missing',
+            'admin_user' => get_current_user_id()
+        ], ['type' => 'company_rejection']);
+
+        // CRITICAL SECURITY FIX: Add CSRF protection
+        check_ajax_referer('rt_company_action', 'nonce');
+
         if (!current_user_can('manage_options')) {
+            rt_employee_debug()->security('Unauthorized company rejection attempt', [
+                'user_id' => get_current_user_id(),
+                'attempted_action' => 'company_rejection'
+            ]);
             wp_die('Unauthorized');
         }
 
@@ -821,8 +867,18 @@ class RT_Employee_Manager_Gravity_Forms_Integration
         $user = get_user_by('ID', $user_id);
 
         if (!$user) {
+            rt_employee_debug()->error('Company rejection failed - user not found', [
+                'user_id' => $user_id
+            ]);
             wp_die('User not found');
         }
+
+        rt_employee_debug()->warning('Company user rejected', [
+            'user_id' => $user_id,
+            'user_email' => $user->user_email,
+            'rejection_reason' => $reason,
+            'rejected_by' => get_current_user_id()
+        ]);
 
         // Update user status to rejected
         update_user_meta($user_id, 'account_status', 'rejected');

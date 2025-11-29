@@ -4,7 +4,7 @@
  * Plugin Name: RT Employee Manager
  * Plugin URI: https://edrishusein.com
  * Description: Professional employee management system with Gravity Forms integration, native WordPress meta boxes, and Austrian SVNR validation
- * Version: 4.1
+ * Version: 4.2
  * Author: Edris Husein
  * Text Domain: rt-employee-manager
  * Domain Path: /languages
@@ -19,7 +19,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('RT_EMPLOYEE_MANAGER_VERSION', '1.0.0');
+define('RT_EMPLOYEE_MANAGER_VERSION', '4.1');
 define('RT_EMPLOYEE_MANAGER_PLUGIN_FILE', __FILE__);
 define('RT_EMPLOYEE_MANAGER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RT_EMPLOYEE_MANAGER_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -154,6 +154,9 @@ class RT_Employee_Manager
 
     private function load_includes()
     {
+        // Load debug logger first
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-debug-logger.php';
+        
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-custom-post-types.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-gravity-forms-integration.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-user-fields.php';
@@ -164,10 +167,24 @@ class RT_Employee_Manager
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-public-registration.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-registration-admin.php';
         require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-login-redirect.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-debug-dashboard.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-employee-data-manager.php';
+        require_once RT_EMPLOYEE_MANAGER_PLUGIN_DIR . 'includes/class-form-field-diagnostics.php';
     }
 
     private function init_components()
     {
+        // Initialize debug logger first
+        RT_Employee_Manager_Debug_Logger::get_instance();
+        
+        // Log plugin initialization
+        rt_employee_debug()->info('Plugin components initializing', [
+            'version' => RT_EMPLOYEE_MANAGER_VERSION,
+            'user_id' => get_current_user_id(),
+            'is_admin' => is_admin(),
+            'wp_version' => get_bloginfo('version')
+        ], ['type' => 'initialization']);
+        
         new RT_Employee_Manager_Custom_Post_Types();
         new RT_Employee_Manager_Gravity_Forms_Integration();
         new RT_Employee_Manager_User_Fields();
@@ -178,6 +195,11 @@ class RT_Employee_Manager
         new RT_Employee_Manager_Public_Registration();
         new RT_Employee_Manager_Registration_Admin();
         new RT_Employee_Manager_Login_Redirect();
+        new RT_Employee_Manager_Debug_Dashboard();
+        RT_Employee_Manager_Data_Manager::get_instance(); // Singleton for data management
+        new RT_Employee_Manager_Form_Field_Diagnostics();
+        
+        rt_employee_debug()->info('All plugin components initialized successfully');
     }
 
     public function activate()

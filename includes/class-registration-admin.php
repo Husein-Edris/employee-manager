@@ -643,11 +643,20 @@ class RT_Employee_Manager_Registration_Admin
      */
     private function create_approved_client($registration)
     {
-        // Generate secure password
-        $password = wp_generate_password(12, true, true);
+        // Generate user-friendly password (no confusing characters)
+        $password = wp_generate_password(12, false, false); // No special chars, easier to type
+        
+        rt_employee_debug()->info('Creating new company user', [
+            'email' => $registration->company_email,
+            'company_name' => $registration->company_name,
+            'password_length' => strlen($password)
+        ], ['type' => 'user_creation']);
 
         // Check if user already exists
         if (email_exists($registration->company_email)) {
+            rt_employee_debug()->warning('User creation failed - email exists', [
+                'email' => $registration->company_email
+            ]);
             return new WP_Error('user_exists', __('A user with this email already exists.', 'rt-employee-manager'));
         }
 
@@ -659,14 +668,24 @@ class RT_Employee_Manager_Registration_Admin
             'first_name' => $registration->contact_first_name,
             'last_name' => $registration->contact_last_name,
             'display_name' => $registration->company_name,
-            'role' => 'kunden'
+            'role' => 'kunden',
+            'send_user_notification' => true // Let WordPress send the notification
         );
 
         $user_id = wp_insert_user($user_data);
 
         if (is_wp_error($user_id)) {
+            rt_employee_debug()->error('User creation failed', [
+                'email' => $registration->company_email,
+                'error' => $user_id->get_error_message()
+            ], ['type' => 'user_creation_error']);
             return $user_id;
         }
+        
+        rt_employee_debug()->info('User created successfully', [
+            'user_id' => $user_id,
+            'email' => $registration->company_email
+        ], ['type' => 'user_creation_success']);
 
         // Add user meta
         $user_meta = array(
@@ -863,7 +882,81 @@ Diese E-Mail wurde automatisch generiert.
             );
         }
 
-        return wp_mail($registration->company_email, $subject, $message);
+        // Send the email
+        $email_sent = wp_mail($registration->company_email, $subject, $message);
+        
+        // Log email attempt
+        rt_employee_debug()->info('Approval email sent', [
+            'to_email' => $registration->company_email,
+            'subject' => $subject,
+            'email_sent' => $email_sent,
+            'has_password' => !empty($result['password'])
+        ], ['type' => 'email_delivery']);
+        
+        // If email failed and this is a new user, let WordPress handle the password reset
+        if (!$email_sent && !empty($result['password'])) {
+            rt_employee_debug()->warning('Email failed, triggering WordPress password reset', [
+                'user_id' => $result['user_id']
+            ]);
+            
+            // Use WordPress built-in password reset
+            $this->trigger_wordpress_password_reset($result['user_id']);
+        }
+        
+        return $email_sent;
+    }
+    
+    /**
+     * Trigger WordPress built-in password reset as fallback
+     */
+    private function trigger_wordpress_password_reset($user_id)
+    {
+        $user = get_user_by('ID', $user_id);
+        if (!$user) {
+            return false;
+        }
+        
+        rt_employee_debug()->info('Triggering WordPress password reset', [
+            'user_id' => $user_id,
+            'user_email' => $user->user_email
+        ], ['type' => 'password_reset_fallback']);
+        
+        // Generate password reset key
+        $key = get_password_reset_key($user);
+        if (is_wp_error($key)) {
+            rt_employee_debug()->error('Failed to generate password reset key', [
+                'user_id' => $user_id,
+                'error' => $key->get_error_message()
+            ]);
+            return false;
+        }
+        
+        // Create custom reset email for company users
+        $reset_url = network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user->user_login), 'login');
+        
+        $subject = sprintf('[%s] Password Reset Required', get_bloginfo('name'));
+        $message = sprintf('
+Hello %s,
+
+Your company account has been approved, but we encountered an issue sending your login credentials.
+
+Please use this link to set your password:
+%s
+
+This link will expire in 24 hours for security reasons.
+
+If you need assistance, please contact the administrator at %s
+
+Best regards,
+%s Team
+        ',
+            $user->display_name ?: $user->first_name,
+            $reset_url,
+            get_option('admin_email'),
+            get_bloginfo('name')
+        );
+        
+        return wp_mail($user->user_email, $subject, $message);
     }
 
     /**

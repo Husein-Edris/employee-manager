@@ -17,10 +17,12 @@ class RT_Employee_Manager_Admin_Settings {
      * Add admin menu
      */
     public function add_admin_menu() {
-        // Only add menu if not already added by the main plugin for kunden users
+        // Always add menu for admins, only skip for kunden who aren't admins
         $current_user = wp_get_current_user();
+        $is_admin = current_user_can('manage_options');
+        $is_kunden_only = in_array('kunden', $current_user->roles) && !$is_admin;
         
-        if (!in_array('kunden', $current_user->roles)) {
+        if (!$is_kunden_only) {
             // Main menu page - accessible to both admins and kunden
             $main_page = add_menu_page(
                 __('Mitarbeiterverwaltung', 'rt-employee-manager'),
@@ -35,6 +37,15 @@ class RT_Employee_Manager_Admin_Settings {
         
         // Settings submenu - admin only
         if (current_user_can('manage_options')) {
+            // Password Help submenu
+            add_submenu_page(
+                'rt-employee-manager',
+                __('Password Help', 'rt-employee-manager'),
+                __('Password Help', 'rt-employee-manager'),
+                'manage_options',
+                'rt-employee-password-help',
+                array($this, 'password_help_page')
+            );
             add_submenu_page(
                 'rt-employee-manager',
                 __('Einstellungen', 'rt-employee-manager'),

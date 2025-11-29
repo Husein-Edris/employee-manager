@@ -389,23 +389,47 @@ class RT_Employee_Manager_Employee_Dashboard
      */
     public function ajax_delete_employee()
     {
+        rt_employee_debug()->info('AJAX Delete Employee Request Started', [
+            'employee_id' => $_POST['employee_id'] ?? 'missing',
+            'nonce' => $_POST['nonce'] ?? 'missing',
+            'user_id' => get_current_user_id(),
+            'post_data' => $_POST
+        ], ['type' => 'ajax_employee_delete']);
+
         check_ajax_referer('rt_employee_dashboard', 'nonce');
 
         if (!is_user_logged_in()) {
+            rt_employee_debug()->error('Unauthorized delete attempt - user not logged in');
             wp_die(__('Nicht autorisiert', 'rt-employee-manager'));
         }
 
         $employee_id = intval($_POST['employee_id']);
         $current_user_id = get_current_user_id();
 
+        rt_employee_debug()->info('Employee delete authorization check', [
+            'employee_id' => $employee_id,
+            'current_user_id' => $current_user_id
+        ]);
+
         // Security check - user can only delete their own employees
         $employer_id = get_post_meta($employee_id, 'employer_id', true);
 
         if ($employer_id != $current_user_id && !current_user_can('manage_options')) {
+            rt_employee_debug()->security('Unauthorized employee delete attempt', [
+                'employee_id' => $employee_id,
+                'attempted_by_user' => $current_user_id,
+                'actual_employer' => $employer_id,
+                'has_admin_cap' => current_user_can('manage_options')
+            ]);
             wp_die(__('Keine Berechtigung', 'rt-employee-manager'));
         }
 
         if (wp_delete_post($employee_id, true)) {
+            rt_employee_debug()->info('Employee successfully deleted', [
+                'employee_id' => $employee_id,
+                'deleted_by' => $current_user_id
+            ]);
+
             // Clear statistics cache
             wp_cache_delete("employee_stats_$current_user_id", 'rt_employee_manager');
             
@@ -417,6 +441,10 @@ class RT_Employee_Manager_Employee_Dashboard
                 'stats' => $updated_stats
             ));
         } else {
+            rt_employee_debug()->error('Failed to delete employee', [
+                'employee_id' => $employee_id,
+                'user_id' => $current_user_id
+            ]);
             wp_send_json_error(array(
                 'message' => __('Fehler beim Löschen des Mitarbeiters', 'rt-employee-manager')
             ));
@@ -428,9 +456,17 @@ class RT_Employee_Manager_Employee_Dashboard
      */
     public function ajax_update_employee_status()
     {
+        rt_employee_debug()->info('AJAX Update Employee Status Request Started', [
+            'employee_id' => $_POST['employee_id'] ?? 'missing',
+            'status' => $_POST['status'] ?? 'missing',
+            'nonce' => $_POST['nonce'] ?? 'missing',
+            'user_id' => get_current_user_id()
+        ], ['type' => 'ajax_employee_status_update']);
+
         check_ajax_referer('rt_employee_dashboard', 'nonce');
 
         if (!is_user_logged_in()) {
+            rt_employee_debug()->error('Unauthorized status update attempt - user not logged in');
             wp_die(__('Nicht autorisiert', 'rt-employee-manager'));
         }
 
